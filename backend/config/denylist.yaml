@@ -1,0 +1,2 @@
+# Optional manual denylist. Empty by default: nothing is excluded by asset type.
+symbols: []

@@ -1,0 +1,10 @@
+# RSS sources (Arch §3.3). URLs are verified by scripts/preflight.py.
+# CryptoPanic is optional and enabled only when CRYPTOPANIC_API_KEY is set and preflight succeeds.
+rss:
+  - { name: CoinDesk,      url: "https://www.coindesk.com/arc/outboundfeeds/rss", enabled: true }
+  - { name: Cointelegraph, url: "https://cointelegraph.com/rss",                  enabled: true }
+  - { name: Decrypt,       url: "https://decrypt.co/feed",                        enabled: true }
+  - { name: The Block,     url: "https://www.theblock.co/rss.xml",                enabled: true }
+cryptopanic:
+  enabled: true                     # still requires CRYPTOPANIC_API_KEY
+symbol_stoplist: []                 # tickers that collide with common words; filled in F8

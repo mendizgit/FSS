@@ -1,0 +1,35 @@
+# Values from SYSTEM_ARCHITECTURE §13. Items marked † are proposed defaults, tunable after observation.
+# Changing any value requires user approval (EXECUTION_RULES §16).
+universe:
+  quote_asset: USDT
+  refresh_hours: 6
+  pinned_symbols: [BTC_USDT, ETH_USDT]
+liquidity:
+  min_turnover_24h_usdt: 1000000
+  min_oi_notional_usdt: 500000
+kline:
+  interval: Min15
+  backfill_bars: 200
+momentum:
+  pool_size: 50
+  rvol_lookback_bars: 96
+  min_rvol: 1.5
+  min_abs_price_change_15m_pct: 1.5
+  top_n: 20
+  rank_by: rvol_15m
+movers:
+  top_n: 10
+  period: utc_day
+classification:
+  windows: [1h, 4h]
+  deadband: { price_pct: 0.2, oi_pct: 0.5, volume_pct: 0.0, funding_delta: 0.0 }   # †
+  crowded_long_funding: 0.0005      # † 0.05 % per funding interval
+  crowded_short_funding: -0.0005    # †
+  stale_after_s: 600
+  snapshot_match_tolerance_s: 90
+control:
+  cycle_budget_s: 240
+  breaker_failures: 3
+  breaker_cooldown_s: 900
+mexc:
+  max_requests_per_second: 5        # † conservative; adjust after preflight

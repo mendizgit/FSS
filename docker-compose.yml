@@ -1,0 +1,85 @@
+name: tss  # distinct from the dev project so the two stacks never touch each other
+# Production (LAN). Only `proxy` publishes a port, bound to the Ubuntu LAN IP.
+# Secrets come from .env (project root); nothing is hard-coded here.
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+  DISPLAY_TZ: ${DISPLAY_TZ:-Asia/Kolkata}
+  RETENTION_DAYS: ${RETENTION_DAYS:-5}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  CRYPTOPANIC_API_KEY: ${CRYPTOPANIC_API_KEY:-}
+  TZ: UTC
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - tss_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: 1g
+
+  worker:
+    build: ./backend
+    restart: unless-stopped
+    command: ["sh", "-c", "alembic upgrade head && python -m tss.entrypoints.worker"]
+    environment: *backend-env
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 1g
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment: *backend-env
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    mem_limit: 512m
+
+  web:
+    build: ./web
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    mem_limit: 512m
+
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      BASIC_AUTH_USER: ${BASIC_AUTH_USER:?set BASIC_AUTH_USER in .env}
+      BASIC_AUTH_HASH: ${BASIC_AUTH_HASH:?set BASIC_AUTH_HASH in .env}
+    ports:
+      - "${UBUNTU_LAN_IP:?set UBUNTU_LAN_IP in .env}:8088:8080"  # host 8088 -> Caddy :8080 in container (8080 is used by another local app)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    mem_limit: 128m
+
+volumes:
+  tss_pgdata:
