@@ -15,7 +15,6 @@ from typing import Any
 
 from tss.agents.base import PARTIAL, SKIPPED, SUCCESS, AgentResult, BaseAgent, Deps
 from tss.clients.telegram import TelegramClient, TelegramError, TelegramRateLimited
-from tss.db.repositories import market as market_repo
 from tss.db.repositories import signals as signals_repo
 from tss.domain.notifier import NOTIFY_EVENTS, format_event_message
 
@@ -63,23 +62,14 @@ class NotifierAgent(BaseAgent):
         if not claimed:
             return AgentResult(status=SUCCESS, rows_in=0, rows_out=0, meta={"sent": 0})
 
-        async with self.deps.session_factory() as session:
-            snaps = await market_repo.latest_snapshots(session, {c[0] for c in claimed})
         keys = [(s, tf, t, ev) for s, tf, t, ev, _ in claimed]
         pending = list(keys)
         sent: list[list[str]] = []
         error: TelegramError | None = None
         try:
-            for index, (symbol, tf, closed_at, event, against) in enumerate(claimed):
-                snap = snaps.get(symbol)
+            for index, (symbol, tf, _closed_at, event, against) in enumerate(claimed):
                 text = format_event_message(
-                    symbol=symbol,
-                    timeframe=tf,
-                    event=event,
-                    against_htf=against,
-                    price=snap.last_price if snap else None,
-                    price_time=snap.ts if snap else None,
-                    bar_close_time=closed_at,
+                    symbol=symbol, timeframe=tf, event=event, against_htf=against
                 )
                 if index > 0:
                     await self._sleep(self._min_interval)
@@ -110,9 +100,9 @@ class NotifierAgent(BaseAgent):
     async def _send(self, text: str) -> None:
         assert self._tg is not None
         try:
-            await self._tg.send_message(text)
+            await self._tg.send_message(text, html=True)
         except TelegramRateLimited as exc:
             if exc.retry_after > MAX_RETRY_WAIT_S:
                 raise
             await self._sleep(exc.retry_after + 0.5)  # honour Telegram's flood control, once
-            await self._tg.send_message(text)
+            await self._tg.send_message(text, html=True)

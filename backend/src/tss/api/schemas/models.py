@@ -41,6 +41,7 @@ class StatusOut(BaseModel):
     universe: dict[str, int]
     db_size_bytes: int
     telegram_configured: bool
+    telegram_paused: bool
     now: datetime
 
 

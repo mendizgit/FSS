@@ -32,6 +32,7 @@ export interface StatusResponse {
   universe: UniverseCounts;
   db_size_bytes: number;
   telegram_configured: boolean;
+  telegram_paused: boolean;
   now: string;
 }
 

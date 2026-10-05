@@ -99,7 +99,13 @@ function RunDetails({ spec, status, run }: { spec: ChipSpec; status: StatusRespo
     <div className="flex flex-col gap-2 text-xs">
       <p className="text-sm font-semibold">{spec.label}</p>
       {spec.note ? <p className="text-muted-foreground">{spec.note}</p> : null}
-      {spec.needsTelegram && !status.telegram_configured ? (
+      {spec.needsTelegram && status.telegram_paused ? (
+        <p className="rounded border border-border bg-muted p-2 text-muted-foreground">
+          Paused. Alerts are switched off with <span className="num">TELEGRAM_ALERTS=off</span> in{" "}
+          <span className="num">.env</span>. Set it to <span className="num">on</span> and restart the
+          worker to resume.
+        </p>
+      ) : spec.needsTelegram && !status.telegram_configured ? (
         <p className="rounded border border-border bg-muted p-2 text-muted-foreground">
           Not configured. Set <span className="num">TELEGRAM_BOT_TOKEN</span> and{" "}
           <span className="num">TELEGRAM_CHAT_ID</span> in <span className="num">.env</span> (see the
@@ -161,7 +167,7 @@ function RunDetails({ spec, status, run }: { spec: ChipSpec; status: StatusRespo
 
 function AgentChip({ spec, status }: { spec: ChipSpec; status: StatusResponse | undefined }) {
   const run = runFor(status, spec.agent);
-  const off = spec.agent === null || (spec.needsTelegram === true && status?.telegram_configured === false);
+  const off = spec.agent === null || (spec.needsTelegram === true && (status?.telegram_configured === false || status?.telegram_paused === true));
   const tone = off ? "muted" : toneForStatus(run?.status);
   const duration = run ? durationSeconds(run.started_at, run.finished_at) : null;
   const next = status && spec.nextKey ? status.next_runs[spec.nextKey] : null;

@@ -2,7 +2,8 @@
 
 The bot token is part of the request URL, so this client NEVER logs, raises or stores a URL,
 and never puts exception text into an error: only the HTTP status, Telegram's own
-`description` and the exception class name. Messages are plain text (no parse_mode).
+`description` and the exception class name. Messages are plain text unless the caller passes
+its own pre-escaped HTML (alerts contain only fixed labels and our own symbol names).
 """
 
 from __future__ import annotations
@@ -94,15 +95,16 @@ class TelegramClient:
             )
         raise TelegramError(COMPONENT, PHASE, method, message, {"status": resp.status_code})
 
-    async def send_message(self, text: str) -> None:
-        await self._call(
-            "sendMessage",
-            {
-                "chat_id": self.chat_id,
-                "text": text[:MAX_TEXT],
-                "link_preview_options": {"is_disabled": True},
-            },
-        )
+    async def send_message(self, text: str, *, html: bool = False) -> None:
+        """Plain text by default. `html=True` is for our own pre-escaped markup (<b>, <i>)."""
+        payload: dict[str, Any] = {
+            "chat_id": self.chat_id,
+            "text": text[:MAX_TEXT],
+            "link_preview_options": {"is_disabled": True},
+        }
+        if html:
+            payload["parse_mode"] = "HTML"
+        await self._call("sendMessage", payload)
 
     async def get_me(self) -> dict[str, Any]:
         result = await self._call("getMe", {})

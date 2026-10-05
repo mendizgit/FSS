@@ -39,14 +39,25 @@ class Settings(BaseSettings):
     cryptopanic_api_key: SecretStr | None = None
     telegram_bot_token: SecretStr | None = None  # Phase 5
     telegram_chat_id: str | None = None  # Phase 5
+    telegram_alerts: str = "on"  # "off" pauses alerts without removing the credentials
 
     @property
-    def telegram_enabled(self) -> bool:
-        """Telegram alerts need both values; an empty value in .env counts as unset."""
+    def telegram_configured(self) -> bool:
+        """Credentials present (an empty value in .env counts as unset)."""
         token = (
             self.telegram_bot_token.get_secret_value().strip() if self.telegram_bot_token else ""
         )
         return bool(token and (self.telegram_chat_id or "").strip())
+
+    @property
+    def telegram_paused(self) -> bool:
+        """TELEGRAM_ALERTS=off (also false / 0 / no / paused) pauses the notifier."""
+        return self.telegram_alerts.strip().lower() in {"off", "false", "0", "no", "paused"}
+
+    @property
+    def telegram_enabled(self) -> bool:
+        """Alerts are sent only with credentials and while not paused."""
+        return self.telegram_configured and not self.telegram_paused
 
 
 class _Strict(BaseModel):

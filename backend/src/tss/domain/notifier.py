@@ -1,55 +1,49 @@
-"""Telegram alert text and send policy (F10). Pure functions; plain text only."""
+"""Telegram alert text and send policy (F10). Pure functions.
+
+Alert format (HTML parse mode; every inserted value is escaped):
+
+    <b>UMAUSDT.P</b>
+    Time : 5 min
+    Signal : 🟢 Buy          (🔴 Sell; "—" for a trend flip without a BUY/SELL signal)
+    Trend : BullT            (BearT)
+    <i>Not financial advice</i>
+"""
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-
-from tss.core.time import format_ist
+from datetime import timedelta
+from html import escape
 
 NOTIFY_EVENTS = ("BUY", "SELL", "BULL_T", "BEAR_T")  # TD events are not pushed
-DISCLAIMER = "Market analysis only. Not financial advice."
-EVENT_TEXT = {"BUY": "BUY", "SELL": "SELL", "BULL_T": "bullT", "BEAR_T": "bearT"}
-ICON = {"BUY": "▲", "BULL_T": "▲", "SELL": "▼", "BEAR_T": "▼"}
+DISCLAIMER = "Not financial advice"
+
+TIME_LABEL = {"5m": "5 min", "15m": "15 min", "1h": "1 hour"}
+SIGNAL_LABEL = {"BUY": "🟢 Buy", "SELL": "🔴 Sell"}  # BULL_T / BEAR_T alone carry no signal
+TREND_LABEL = {"BUY": "BullT", "BULL_T": "BullT", "SELL": "BearT", "BEAR_T": "BearT"}
 
 # A late alert is worse than none: events older than this (by timeframe) are never sent.
 MAX_AGE = {"5m": timedelta(minutes=15), "15m": timedelta(minutes=30), "1h": timedelta(hours=2)}
 DEFAULT_MAX_AGE = timedelta(minutes=15)
 
 
-def format_price(value: float | None) -> str:
-    if value is None:
-        return "unavailable"
-    abs_v = abs(value)
-    digits = (
-        2 if abs_v >= 1000 else 3 if abs_v >= 10 else 4 if abs_v >= 1 else 5 if abs_v >= 0.01 else 7
-    )
-    return f"{value:,.{digits}f}"
+def display_symbol(symbol: str) -> str:
+    """BTC_USDT -> BTCUSDT.P (perpetual notation)."""
+    return f"{symbol.replace('_', '')}.P"
 
 
 def format_event_message(
-    *,
-    symbol: str,
-    timeframe: str,
-    event: str,
-    against_htf: bool | None,
-    price: float | None,
-    price_time: datetime | None,
-    bar_close_time: datetime,
+    *, symbol: str, timeframe: str, event: str, against_htf: bool | None
 ) -> str:
-    label = EVENT_TEXT.get(event, event)
+    footer = DISCLAIMER if not against_htf else f"✗ Against the 4H trend · {DISCLAIMER}"
     lines = [
-        f"{ICON.get(event, '•')} {label} · {symbol} · {timeframe}",
-        f"Bar closed: {format_ist(bar_close_time)}",
-        f"Last price: {format_price(price)}"
-        + (f" (snapshot {format_ist(price_time)})" if price is not None and price_time else ""),
+        f"<b>{escape(display_symbol(symbol))}</b>",
+        f"Time : {escape(TIME_LABEL.get(timeframe, timeframe))}",
+        f"Signal : {SIGNAL_LABEL.get(event, '—')}",
+        f"Trend : {escape(TREND_LABEL.get(event, event))}",
+        f"<i>{escape(footer)}</i>",
     ]
-    if against_htf:
-        lines.append("✗ Against the 4H trend")
-    elif against_htf is False:
-        lines.append("✓ With the 4H trend")
-    lines.append(DISCLAIMER)
     return "\n".join(lines)
 
 
 def connectivity_message() -> str:
-    return f"TSS test message: Telegram alerts are connected.\n{DISCLAIMER}"
+    return f"TSS test message: Telegram alerts are connected.\n{DISCLAIMER}."

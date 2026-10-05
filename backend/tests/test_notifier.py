@@ -3,7 +3,6 @@
 import asyncio
 import json
 import logging
-from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -16,49 +15,63 @@ from tss.clients.telegram import (
     TelegramPermanentError,
     TelegramRateLimited,
 )
-from tss.domain.notifier import DISCLAIMER, connectivity_message, format_event_message, format_price
+from tss.domain.notifier import (
+    DISCLAIMER,
+    connectivity_message,
+    display_symbol,
+    format_event_message,
+)
 
 TOKEN = "123456:SECRET-TOKEN-VALUE"
-CLOSE = datetime(2026, 10, 5, 10, 5, 0, tzinfo=UTC)  # 15:35:00 IST
-SNAP = datetime(2026, 10, 5, 10, 0, 0, tzinfo=UTC)  # 15:30:00 IST
 
 
 def msg(**kw: object) -> str:
     base: dict[str, object] = {
-        "symbol": "BTC_USDT",
+        "symbol": "UMA_USDT",
         "timeframe": "5m",
         "event": "BUY",
-        "against_htf": True,
-        "price": 85913.4,
-        "price_time": SNAP,
-        "bar_close_time": CLOSE,
+        "against_htf": False,
     }
     return format_event_message(**{**base, **kw})  # type: ignore[arg-type]
 
 
-def test_message_text_is_exact() -> None:
+def test_buy_message_is_exact() -> None:
     assert msg() == (
-        "▲ BUY · BTC_USDT · 5m\n"
-        "Bar closed: 2026-10-05 15:35:00 IST\n"
-        "Last price: 85,913.40 (snapshot 2026-10-05 15:30:00 IST)\n"
-        "✗ Against the 4H trend\n"
-        "Market analysis only. Not financial advice."
+        "<b>UMAUSDT.P</b>\n"
+        "Time : 5 min\n"
+        "Signal : 🟢 Buy\n"
+        "Trend : BullT\n"
+        "<i>Not financial advice</i>"
     )
 
 
-def test_message_variants() -> None:
-    assert "✓ With the 4H trend" in msg(against_htf=False)
-    text = msg(against_htf=None, event="BEAR_T", price=None, price_time=None)
-    assert text.startswith("▼ bearT · BTC_USDT · 5m") and "Last price: unavailable" in text
-    assert "4H trend" not in text
-    assert all(DISCLAIMER in m for m in (msg(), text, connectivity_message()))
+def test_sell_and_trend_only_variants() -> None:
+    sell = msg(event="SELL", timeframe="15m", symbol="BTC_USDT")
+    assert sell.splitlines()[:4] == [
+        "<b>BTCUSDT.P</b>",
+        "Time : 15 min",
+        "Signal : 🔴 Sell",
+        "Trend : BearT",
+    ]
+    bull_only = msg(event="BULL_T", timeframe="1h")
+    assert (
+        "Time : 1 hour" in bull_only and "Signal : —" in bull_only and "Trend : BullT" in bull_only
+    )
+    bear_only = msg(event="BEAR_T")
+    assert "Signal : —" in bear_only and "Trend : BearT" in bear_only
 
 
-def test_price_formatting() -> None:
-    assert format_price(0.0001234) == "0.0001234"
-    assert format_price(2.5) == "2.5000"
-    assert format_price(1234.5) == "1,234.50"
-    assert format_price(None) == "unavailable"
+def test_against_4h_marker_and_escaping() -> None:
+    assert msg(against_htf=True).endswith("<i>✗ Against the 4H trend · Not financial advice</i>")
+    assert "✗" not in msg(against_htf=None) and "✗" not in msg(against_htf=False)
+    weird = msg(symbol="A<b>&_USDT")
+    assert "<b>A&lt;b&gt;&amp;USDT.P</b>" in weird  # symbols are escaped, markup cannot be injected
+
+
+def test_display_symbol() -> None:
+    assert display_symbol("BTC_USDT") == "BTCUSDT.P"
+    assert display_symbol("1000PEPE_USDT") == "1000PEPEUSDT.P"
+    assert DISCLAIMER in connectivity_message()
 
 
 def make_client(handler) -> TelegramClient:  # type: ignore[no-untyped-def]
@@ -76,11 +89,16 @@ def test_send_message_request_shape() -> None:
         return httpx.Response(200, json={"ok": True, "result": {"message_id": 1}})
 
     asyncio.run(make_client(handler).send_message("hello"))
+    plain = seen["body"]
+    asyncio.run(make_client(handler).send_message("<b>x</b>", html=True))
+    assert isinstance(plain, dict) and "parse_mode" not in plain
+    assert isinstance(seen["body"], dict) and seen["body"]["parse_mode"] == "HTML"
+    asyncio.run(make_client(handler).send_message("hello"))
     assert seen["path"] == f"/bot{TOKEN}/sendMessage"
     body = seen["body"]
     assert isinstance(body, dict)
     assert body["chat_id"] == "42" and body["text"] == "hello"
-    assert "parse_mode" not in body  # plain text: titles can never inject markup
+    assert "parse_mode" not in body  # plain by default; HTML only for our own escaped markup
     assert body["link_preview_options"] == {"is_disabled": True}
 
 

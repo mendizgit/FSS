@@ -38,6 +38,7 @@ class FakeTelegram:
 
     def __init__(self) -> None:
         self.delivered: list[str] = []
+        self.modes: list[str | None] = []
         self.requests = 0
         self.behaviour: Callable[[int], httpx.Response | Exception | None] = lambda n: None
         self.sleeps: list[float] = []
@@ -50,7 +51,9 @@ class FakeTelegram:
             raise outcome
         if outcome is not None:
             return outcome
-        self.delivered.append(json.loads(request.content)["text"])
+        body = json.loads(request.content)
+        self.modes.append(body.get("parse_mode"))
+        self.delivered.append(body["text"])
         return httpx.Response(200, json={"ok": True, "result": {"message_id": len(self.delivered)}})
 
     def client(self) -> TelegramClient:
@@ -146,22 +149,34 @@ async def scenario_exactly_once(cfg: AppConfig) -> None:
             )
         ),
     )
-    first = next(m for m in tg.delivered if "BUY" in m)
+    by_event = {
+        "BUY": next(m for m in tg.delivered if "Signal : 🟢 Buy" in m),
+        "SELL": next(m for m in tg.delivered if "Signal : 🔴 Sell" in m),
+        "BULL_T": next(m for m in tg.delivered if "BTCUSDT.P" in m and "Time : 15 min" in m),
+        "BEAR_T": next(m for m in tg.delivered if "ETHUSDT.P" in m and "Time : 15 min" in m),
+    }
     check(
-        "message has symbol, timeframe, event, against-4H tag, price, IST bar time, disclaimer",
-        all(
-            x in first
-            for x in (
-                "BTC_USDT",
-                "5m",
-                "BUY",
-                "Against the 4H trend",
-                "85,913.40",
-                "IST",
-                "Not financial advice",
-            )
+        "BUY alert: bold BTCUSDT.P, Time : 5 min, green Buy, BullT, against-4H marker, disclaimer",
+        by_event["BUY"].splitlines()[:4]
+        == ["<b>BTCUSDT.P</b>", "Time : 5 min", "Signal : 🟢 Buy", "Trend : BullT"]
+        and "Against the 4H trend" in by_event["BUY"]
+        and "Not financial advice" in by_event["BUY"],
+        by_event["BUY"].replace("\n", " | "),
+    )
+    check(
+        "SELL alert: red Sell + BearT; trend-only alerts show Signal : - and the trend",
+        by_event["SELL"].splitlines()[2:4] == ["Signal : 🔴 Sell", "Trend : BearT"]
+        and "Signal : —" in by_event["BULL_T"]
+        and "Trend : BullT" in by_event["BULL_T"]
+        and "Signal : —" in by_event["BEAR_T"]
+        and "Trend : BearT" in by_event["BEAR_T"],
+    )
+    check(
+        "alerts are sent with parse_mode HTML (bold symbol) and contain no price or internal ids",
+        set(tg.modes) == {"HTML"}
+        and all(
+            m.startswith("<b>") and "USDT_" not in m and "85,913" not in m for m in tg.delivered
         ),
-        first.replace("\n", " | "),
     )
     check(
         "no secret in any message", all(TOKEN not in m and "SECRET" not in m for m in tg.delivered)
@@ -188,7 +203,7 @@ async def scenario_concurrency(cfg: AppConfig) -> None:
     tg = FakeTelegram()
     a, b = agent_for(c, tg), agent_for(c, tg)
     await asyncio.gather(a.execute(uuid.uuid4(), now), b.execute(uuid.uuid4(), now))
-    names = sorted(m.split("·")[1].strip() for m in tg.delivered)
+    names = sorted(m.splitlines()[0] for m in tg.delivered)
     check(
         "12 events delivered exactly once by two concurrent agents (no duplicates, none lost)",
         len(tg.delivered) == 12 and len(set(names)) == 12,
@@ -403,6 +418,27 @@ async def scenario_cap_and_config(cfg: AppConfig) -> None:
     check(
         "/api/status reports telegram_configured=true when both values are set",
         (await sf.api_status(on_cfg)).get("telegram_configured") is True,
+    )
+    paused_settings = cfg.settings.model_copy(
+        update={
+            "telegram_bot_token": SecretStr("1:x"),
+            "telegram_chat_id": "42",
+            "telegram_alerts": "OFF",
+        }
+    )
+    paused_cfg = AppConfig(
+        settings=paused_settings,
+        thresholds=cfg.thresholds,
+        denylist=cfg.denylist,
+        news_sources=cfg.news_sources,
+    )
+    paused_status = await sf.api_status(paused_cfg)
+    check(
+        "TELEGRAM_ALERTS=off (any case) pauses alerts: credentials kept, notifier disabled, "
+        "status says paused",
+        paused_settings.telegram_configured is True
+        and paused_settings.telegram_enabled is False
+        and paused_status.get("telegram_paused") is True,
     )
     empty = cfg.settings.model_copy(
         update={"telegram_bot_token": SecretStr(""), "telegram_chat_id": "42"}

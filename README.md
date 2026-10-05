@@ -55,12 +55,21 @@ sudo ufw status numbered
 Docker can bypass ufw for published ports; the port is therefore bound to `UBUNTU_LAN_IP` only (see `agent-kit/skills/deployment.md` for the `DOCKER-USER` note). Use DHCP reservations so both IPs stay fixed.
 
 ## Telegram alerts (Phase 5)
-Optional. New **BUY / SELL / bullT / bearT** signal events are pushed to one Telegram chat, exactly once each, rate-limited (about 1 message/s), only while they are fresh (5m: 15 min, 15m: 30 min, 1h: 2 h old at most). Each message has the symbol, timeframe, event, an against-4H tag, the last price, the bar close time in IST and "Not financial advice". The bot token is never logged or shown.
+Optional. New **BUY / SELL / bullT / bearT** signal events are pushed to one Telegram chat, exactly once each, rate-limited (about 1 message/s), only while they are fresh (5m: 15 min, 15m: 30 min, 1h: 2 h old at most). Alerts look like this (HTML, symbol in bold):
+```
+UMAUSDT.P
+Time : 5 min
+Signal : 🟢 Buy          (🔴 Sell; "—" for a trend flip without a BUY/SELL signal)
+Trend : BullT            (BearT)
+Not financial advice     (prefixed with "✗ Against the 4H trend ·" when it goes against the 4H trend)
+```
 1. In Telegram, talk to **@BotFather**, create a bot and put its token in `.env` as `TELEGRAM_BOT_TOKEN`.
 2. Open your new bot and send it `/start`.
 3. `cd backend && uv run python scripts/telegram_setup.py discover` prints your chat id; put it in `.env` as `TELEGRAM_CHAT_ID`.
-4. `uv run python scripts/telegram_setup.py test` sends a test message.
+4. `uv run python scripts/telegram_setup.py test` sends a test message (`sample` sends one alert in the format above).
 5. `docker compose up -d worker` (restart so the worker picks up `.env`). The dashboard's Telegram chip turns on.
+
+**Pause / resume:** set `TELEGRAM_ALERTS=off` in `.env` (then `docker compose up -d worker api`) to stop alerts without removing the token and chat id; set it back to `on` to resume. Events that are still fresh when you resume (5m: 15 min, 15m: 30 min, 1h: 2 h) are sent; older ones are skipped.
 
 Delivery is claim-then-send: an event is marked notified before it is sent and released again if sending fails, so it is never duplicated; a crash between those two steps can lose that one alert.
 

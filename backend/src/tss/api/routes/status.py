@@ -69,7 +69,8 @@ async def status(session: Session, cfg: Config) -> StatusOut:
         },
         universe=await contracts_repo.universe_counts(session),
         db_size_bytes=await ops.db_size_bytes(session),
-        telegram_configured=cfg.settings.telegram_enabled,
+        telegram_configured=cfg.settings.telegram_configured,
+        telegram_paused=cfg.settings.telegram_configured and cfg.settings.telegram_paused,
         now=now,
     )
 
