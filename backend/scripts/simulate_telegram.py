@@ -160,12 +160,12 @@ async def scenario_exactly_once(cfg: AppConfig) -> None:
         "BEAR_T": next(m for m in tg.delivered if "ETHUSDT.P" in m and "Time : 15 min" in m),
     }
     check(
-        "BUY alert: bold BTCUSDT.P, Time : 5 min, green Buy, BullT, against-4H marker, disclaimer",
+        "BUY alert: bold BTCUSDT.P, 5 min, green Buy, BullT, against-4H marker, no disclaimer",
         [ln for ln in by_event["BUY"].splitlines() if not ln.startswith("Bar close : ")][:4]
         == ["<b>BTCUSDT.P</b>", "Time : 5 min", "Signal : 🟢 Buy", "Trend : BullT"]
         and re.search(r"\nBar close : \d\d:\d\d IST\n", by_event["BUY"]) is not None
         and "Against the 4H trend" in by_event["BUY"]
-        and "Not financial advice" in by_event["BUY"],
+        and "financial advice" not in by_event["BUY"],
         by_event["BUY"].replace("\n", " | "),
     )
     check(

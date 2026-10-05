@@ -405,7 +405,7 @@ There is a single route, `/`. The layout:
 - All times are shown in IST with an "IST" suffix; the tooltip shows UTC.
 - `robots: noindex`.
 - No external runtime CDNs.
-- The footer notice "Market analysis only — not financial advice" is always visible.
+- The footer notice was removed at the user's request (2026-10-06).
 
 ---
 

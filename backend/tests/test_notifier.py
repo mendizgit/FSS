@@ -17,7 +17,6 @@ from tss.clients.telegram import (
     TelegramRateLimited,
 )
 from tss.domain.notifier import (
-    DISCLAIMER,
     connectivity_message,
     display_symbol,
     format_event_message,
@@ -39,12 +38,7 @@ def msg(**kw: object) -> str:
 
 def test_buy_message_is_exact() -> None:
     assert msg() == (
-        "<b>UMAUSDT.P</b>\n"
-        "Time : 5 min\n"
-        "Bar close : 14:35 IST\n"
-        "Signal : 🟢 Buy\n"
-        "Trend : BullT\n"
-        "<i>Not financial advice</i>"
+        "<b>UMAUSDT.P</b>\nTime : 5 min\nBar close : 14:35 IST\nSignal : 🟢 Buy\nTrend : BullT"
     )
 
 
@@ -69,7 +63,8 @@ def test_sell_and_trend_only_variants() -> None:
 
 
 def test_against_4h_marker_and_escaping() -> None:
-    assert msg(against_htf=True).endswith("<i>✗ Against the 4H trend · Not financial advice</i>")
+    assert msg(against_htf=True).endswith("\n<i>✗ Against the 4H trend</i>")
+    assert "financial advice" not in msg(against_htf=True) and "financial advice" not in msg()
     assert "✗" not in msg(against_htf=None) and "✗" not in msg(against_htf=False)
     weird = msg(symbol="A<b>&_USDT")
     assert "<b>A&lt;b&gt;&amp;USDT.P</b>" in weird  # symbols are escaped, markup cannot be injected
@@ -78,7 +73,7 @@ def test_against_4h_marker_and_escaping() -> None:
 def test_display_symbol() -> None:
     assert display_symbol("BTC_USDT") == "BTCUSDT.P"
     assert display_symbol("1000PEPE_USDT") == "1000PEPEUSDT.P"
-    assert DISCLAIMER in connectivity_message()
+    assert "financial advice" not in connectivity_message()
 
 
 def make_client(handler) -> TelegramClient:  # type: ignore[no-untyped-def]

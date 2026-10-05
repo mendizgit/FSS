@@ -52,7 +52,7 @@ The agent's job is to execute this plan. It must not redesign it.
 ## Domain rules (non-negotiable)
 
 - **No trading.** Use only public market-data endpoints. Never call order, position, account or transfer endpoints.
-- **No personalised advice.** The UI shows a persistent notice: "Market analysis only — not financial advice."
+- **No personalised advice.** (The persistent UI notice and the Telegram disclaimer were removed at the user's request on 2026-10-06; the system still gives no personalised advice.)
 - **Single source = MEXC.** Identity is the MEXC futures contract symbol (`BASE_USDT`). No CMC or other market-data provider.
 - **Nothing is excluded by asset type.** BTC and ETH are tracked. Only the liquidity gate filters contracts, plus an optional manual denylist that is empty by default.
 - **Simple scope:** order flow, footprint, CVD and order-book analysis are out of scope.

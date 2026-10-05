@@ -128,9 +128,6 @@ export function Dashboard() {
           <NewsPanel />
         </div>
       </main>
-      <footer className="sticky bottom-0 shrink-0 border-t border-border bg-card px-3 py-1.5 text-center text-xs text-muted-foreground">
-        Market analysis only — not financial advice.
-      </footer>
     </div>
   );
 }

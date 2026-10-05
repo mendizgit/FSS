@@ -55,13 +55,14 @@ sudo ufw status numbered
 Docker can bypass ufw for published ports; the port is therefore bound to `UBUNTU_LAN_IP` only (see `agent-kit/skills/deployment.md` for the `DOCKER-USER` note). Use DHCP reservations so both IPs stay fixed.
 
 ## Telegram alerts (Phase 5)
-Optional. New **BUY / SELL / bullT / bearT** signal events are pushed to one Telegram chat, exactly once each, rate-limited (about 1 message/s), only while they are fresh (5m: 15 min, 15m: 30 min, 1h: 2 h old at most). Alerts look like this (HTML, symbol in bold):
+Optional. New **BUY / SELL / bullT / bearT / TD** signal events (5m and 15m only) are pushed to one Telegram chat, exactly once each, rate-limited (about 1 message/s), only while they are fresh (5m: 15 min, 15m: 30 min, 1h: 2 h old at most). Alerts look like this (HTML, symbol in bold):
 ```
 UMAUSDT.P
 Time : 5 min
-Signal : 🟢 Buy          (🔴 Sell; "—" for a trend flip without a BUY/SELL signal)
-Trend : BullT            (BearT)
-Not financial advice     (prefixed with "✗ Against the 4H trend ·" when it goes against the 4H trend)
+Bar close : 14:35 IST
+Signal : 🟢 Buy          (🔴 Sell; "—" for a trend flip or TD without a BUY/SELL signal)
+Trend : BullT            (BearT; "TD Bull" / "TD Bear")
+✗ Against the 4H trend   (only when the event goes against the 4H trend)
 ```
 1. In Telegram, talk to **@BotFather**, create a bot and put its token in `.env` as `TELEGRAM_BOT_TOKEN`.
 2. Open your new bot and send it `/start`.

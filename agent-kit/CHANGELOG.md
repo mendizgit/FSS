@@ -1,6 +1,7 @@
 # Agent Kit Changelog
 
 ## v1.3.3 — 2026-10-05 (user-approved signal coverage change)
+- Telegram alerts no longer carry the "Not financial advice" footer (user request); the `✗ Against the 4H trend` line remains when applicable. The dashboard footer notice and the `telegram_setup test` disclaimer were removed as well (user request, overrides PROJECT_GUIDELINES/ui-design notice rules; docs updated). README keeps its own disclaimer line.
 - Telegram now also pushes TD_BULL / TD_BEAR (user request; was BUY/SELL/bullT/bearT only). TD alert: `Signal : —`, `Trend : TD Bull|TD Bear`. Scope = every signal-engine symbol (momentum-selected + majors). Alerts are sent for 5m and 15m only (1h stays dashboard-only) and carry `Bar close : HH:MM IST` (close time of the signal bar).
 - Persistent switches: table `control_flags` (migration 7a1d3c9e5b20), `POST /api/flags/{news|telegram}` {enabled}, `/api/status.flags`. News off = news job skipped (no fetch). Telegram needs credentials; a dashboard choice overrides `TELEGRAM_ALERTS` in .env, with no choice the .env value decides. Header buttons "News feed: on/off" and "Telegram: on/off". First write endpoint (behind the same Caddy login).
 - Zone column restored in the Signals table (user request): `signals.zone_position` (migration c5a2d7e91f08), API field and GUI column (Top zone+ / Top zone / Mid / Bottom zone / Bottom zone+). Filled on the next signal run.

@@ -129,4 +129,4 @@ Before delivery inspect the affected screens for:
   - respect `prefers-reduced-motion`
   - no decorative animation
 - **Empty, warming-up and stale states** use a short sentence plus an icon and the next expected update time.
-- **Footer notice** is always visible: "Market analysis only — not financial advice."
+- **Footer notice** removed at the user's request (2026-10-06).

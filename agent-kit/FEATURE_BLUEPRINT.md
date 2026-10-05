@@ -267,7 +267,7 @@ Out of scope: order flow, footprint, CVD, order book analysis, any non-MEXC mark
   - Each item shows source, relative time and IST time, plus symbol chips.
   - Clicking a symbol chip filters the list.
   - Links use `rel="noopener noreferrer"`.
-- **Footer notice:** "Market analysis only — not financial advice."
+- **Footer notice:** removed at the user's request (2026-10-06).
 
 **States:** loading skeletons, empty ("No symbols passed the momentum gate this cycle"), warming-up, error (showing the component name), stale.
 
@@ -341,7 +341,7 @@ Out of scope: order flow, footprint, CVD, order book analysis, any non-MEXC mark
 - Send exactly once per `signal_events` row.
 - Rate-limit sends.
 - Never include secrets.
-- Message contents: symbol, timeframe, event, against-HTF tag, price, bar close time (IST) and the text "not financial advice".
+- Message contents: symbol, timeframe, event, against-HTF tag, price, bar close time (IST); no disclaimer text (removed 2026-10-06).
 
 **Acceptance:** A test message is delivered, and each event is delivered exactly once.
 
