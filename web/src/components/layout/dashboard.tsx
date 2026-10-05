@@ -34,7 +34,7 @@ export function Dashboard() {
       </Tabs>
       <main
         id="main"
-        className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-3 p-2 md:grid-cols-2 md:p-3 xl:grid-cols-[minmax(0,1.75fr)_minmax(0,1.4fr)_minmax(0,0.55fr)] xl:grid-rows-[minmax(0,1fr)]"
+        className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-3 p-2 md:grid-cols-2 md:p-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1.5fr)_minmax(0,0.55fr)] xl:grid-rows-[minmax(0,1fr)]"
       >
         <div className={cn("min-h-0 min-w-0 flex-col max-md:min-h-[60dvh] md:max-xl:h-[78dvh]", show("classification"))}>
           <ClassificationPanel />

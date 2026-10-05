@@ -135,3 +135,18 @@ class MoversOut(BaseModel):
     ts: datetime | None
     gainers: list[MoverRowOut]
     losers: list[MoverRowOut]
+
+
+class NewsItemOut(BaseModel):
+    id: int
+    source: str
+    title: str
+    url: str
+    published_at: datetime | None
+    fetched_at: datetime
+    symbols: list[str]
+
+
+class NewsOut(BaseModel):
+    symbol: str | None
+    items: list[NewsItemOut]

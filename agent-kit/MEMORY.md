@@ -1,17 +1,18 @@
 # MEMORY — TSS progress (single file · edit changed lines only · max 150 lines)
 
-updated: 2026-10-05 | commit: 2424ec6 | phase: P2 | status: AWAITING_REVIEW
+updated: 2026-10-05 | commit: 03d9d1f | phase: P3 | status: AWAITING_REVIEW
 
 ## Next step
-- P2 complete + validated (ER §12). Waiting for user review and "commit" (P2 not committed; P1 = 2424ec6). User should open the dashboard via the proxy (needs basic-auth password) and confirm. Open: P1 decisions (zero_fee cadence, Float vs numeric, preflight wording), news panel is a Phase 3 placeholder. Next phase P3 (F8 News) only after "start P3" - plan first.
+- P3 complete + validated (ER §12). Waiting for user review and "commit" (P3 not committed; P2 = 03d9d1f). Decisions needed: news tagging by coin NAME (Bitcoin->BTC) vs ticker only, CryptoPanic (unverified, not implemented), stoplist review; plus older P1 items. P4 (signals) and P5 (Telegram) are gated: only on user typing "start P4" / "start P5".
 
 ## Features (TODO / WIP / DONE / BLOCKED)
-F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 DONE(news/signals = module-off placeholders) · F8 TODO · F9 BLOCKED(gated) · F10 BLOCKED(gated) · F11 DONE · F12 DONE(data)
+F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 DONE(news/signals = module-off placeholders) · F8 DONE · F9 BLOCKED(gated) · F10 BLOCKED(gated) · F11 DONE · F12 DONE(data)
 
 ## Blockers / questions for user
 - none
 
 ## Log (newest first · max 10 lines · delete oldest)
+- 2026-10-05 P3 built + validated: RSS client (feedparser) + NewsAgent (15 min, +50 s), URL dedupe/normalisation, ticker tagging, /api/news, live News panel + chip; simulate_news 27/27, simulate_failures 47/47, simulate_ticker 17/17, pytest 37, web lint/type/build ok, prod audit clean; live: 4 sources, 112 items, re-run adds 0
 - 2026-10-05 P2 built + validated: realtime (hub, LISTEN, ticker gateway, /ws), Next dashboard (shadcn/base-ui, TanStack Query, shared WS client, price store, dark/light AA tokens); simulate_ticker 17/17, simulate_failures 47/47, web lint/type/build ok, prod audit clean; verified in headless Firefox at 1920/1440/1024/mobile, live ticks update w/o refresh, NOTIFY->/ws ok in Docker
 - 2026-10-05 P1 phase-end validation passed: ruff/mypy/pip-audit clean, pytest 29, simulate_failures 47/47, alembic check clean, preflight 27/0, web lint/type/build ok, secrets scan clean, Docker stack ran scheduled :05 and :15:20 ticks; zero_fee flag is volatile on MEXC (70..507 within the hour)
 - 2026-10-05 P1 built: clients(http/futures/spot), domain(5 mods, 29 unit checks), repos, agents(universe/snapshot/kline_sync/momentum/classification/movers/retention), control(breaker/health/pipeline/scheduler), API routes, scripts/simulate_failures.py (36 checks pass); live run natively + in Docker ok; BTC 1h metrics hand-verified vs raw MEXC
@@ -21,10 +22,10 @@ F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 
 - 2026-10-05 P0 step 5 done: web/ Next 16.3.8 + React 19 + Tailwind 4, TS strict, output standalone; pnpm lint/type-check/build pass, audit clean; state codes confirmed from MEXC docs
 - 2026-10-05 P0 step 4 done: scripts/preflight.py 27 checks, 0 failed, 3 to review (state meaning, kline cap 2000, forming bar included); ruff+mypy clean; Arch §3.1/§4 + CHANGELOG v1.3.1 edited (time unit seconds, state codes confirmed from MEXC docs)
 - 2026-10-05 P0 step 3 done: models match Arch §9; migration cdfd7a420a08 (plain sa.DateTime(tz)); upgrade/downgrade/upgrade ok, `alembic check` clean, 0 naive timestamps, 5 indexes; ruff+mypy clean; tss-db-dev running (volume tss_pgdata_dev)
-- 2026-10-05 reconcile after crash: step 3 partially on disk (db/ models+session, alembic env, docker-compose.dev.yml; NO migration, db not started); .env has all .env.example names
 
 ## Decisions & API quirks (one line each)
 - MEXC detail zero-fee fields flicker between calls (507, 507, 451 within a minute; our 6 h refresh once caught 70); badge is display-only
+- P3 decisions: news tagged by TICKER only (whole-word, case-sensitive, >=3 chars, active contracts, stoplist in news_sources.yaml); headlines usually say 'Bitcoin' not 'BTC' so many items are untagged (contract detail has baseCoinName; using it = rule change, needs approval); CryptoPanic NOT implemented: API docs unreachable, endpoint/terms unverified, and no key set; items w/ implausible future date get published_at NULL; old (>5d) items skipped; NOTIFY payloads over 7000 B are shrunk to {truncated:true}; feeds are fetched with follow_redirects
 - P2 decisions: ws events are the primary refresh trigger (60 s fallback poll), ticks only feed price store; /ws served by api process (hub + LISTEN tss_events + MEXC ticker gateway for selected+pinned); dev needs API_ORIGIN + NEXT_PUBLIC_WS_URL; layout cols 1.75/1.4/0.55 at >=1280; News/Signals panels are placeholders (F8 = P3, F9 = P4); no keepPreviousData on window toggle (avoids mislabelled numbers)
 - P1 decisions: pool_rank for pinned outside the pool = position in full RVOL ranking (>50), no row if RVOL unknown; 'active' contracts = state 0 + not denylisted + in latest universe refresh (updated_at == max); WARMING_UP system state while earliest snapshot < 4h old; TF_CONFLICT = bullish(LONG_BUILDUP,SHORT_COVERING) vs bearish(SHORT_BUILDUP,LONG_UNWINDING); kline gap check uses newest 2n bars; HTTP retries = 3 after first attempt (2/4/8 s + jitter)
 - MEXC payloads: futures ticker numerics are numbers, spot ticker numerics are strings, spot kline row = [openMs,o,h,l,c,vol,closeMs,quoteVol] (ms), futures kline time in s, futures kline amount = USDT turnover; detail has isZeroFeeRate flags (not used; zero_fee = both fee rates == 0 per Arch §4)
@@ -57,6 +58,8 @@ F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 
 - backend/src/tss/realtime/{hub,notify,ticker_gateway,symbols}.py, api/ws.py — event hub, LISTEN loop, MEXC WS gateway (F6), /ws
 - backend/scripts/simulate_ticker.py — F6 acceptance (fake MEXC WS server)
 - web/src/{lib,hooks,types}/ — api-client, ws-client, price-store, time (IST only here), format, query hooks; web/src/features/{status-bar,classification,movers,signals,news}/; components/{layout,tss,ui}
+- backend/src/tss/clients/rss.py, domain/news.py, agents/news.py, db/repositories/news.py, api/routes/news.py — F8 (feeds -> news_items -> /api/news); web/src/features/news/news-panel.tsx
+- backend/scripts/simulate_news.py — F8 acceptance (throwaway DB)
 - backend/scripts/preflight.py — public MEXC/RSS/WS checks, prints table (exit 1 on any ✗)
 - backend/config/{thresholds,denylist,news_sources}.yaml — Arch §13 values (RSS URLs proposed, verify in preflight)
 

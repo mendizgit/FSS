@@ -30,6 +30,7 @@ from tss.clients.http import HttpClient
 from tss.clients.mexc_futures import MexcFuturesClient
 from tss.clients.mexc_spot import MexcSpotClient
 from tss.clients.models import ContractDetail, FuturesTicker, Kline, SpotKline, SpotTicker
+from tss.clients.rss import RssClient
 from tss.control.pipeline import Controller
 from tss.core.errors import DataSourceError
 from tss.core.settings import AppConfig, load_config_or_exit
@@ -200,7 +201,7 @@ def make_controller(cfg: AppConfig, futures: Any, spot: Any) -> Controller:
         futures=cast("MexcFuturesClient", futures),
         spot=cast("MexcSpotClient", spot),
     )
-    return Controller(deps)
+    return Controller(deps, RssClient(HttpClient({})))
 
 
 async def state_of(c: Controller) -> str | None:
@@ -695,7 +696,7 @@ async def reset_sim_data(scfg: AppConfig) -> None:
                 text(
                     "TRUNCATE agent_runs, system_state, market_snapshots, "
                     "klines_15m, daily_opens, momentum_rankings, classifications, "
-                    "market_movers, contracts"
+                    "market_movers, news_items, contracts"
                 )
             )
     finally:

@@ -70,6 +70,24 @@ function WsIndicator() {
   );
 }
 
+function NewsSources({ meta }: { meta: Record<string, unknown> }) {
+  const sources = (meta.sources ?? {}) as Record<string, { status?: string; items?: number; new?: number; error?: string }>;
+  const entries = Object.entries(sources);
+  if (entries.length === 0) return null;
+  return (
+    <ul className="flex flex-col gap-0.5 border-t border-border pt-2">
+      {entries.map(([name, s]) => (
+        <li key={name} className="flex justify-between gap-2">
+          <span className="text-muted-foreground">{name}</span>
+          <span className={s.status === "ok" ? "text-up" : "text-crit"} title={s.error}>
+            {s.status === "ok" ? `${s.items ?? 0} items · ${s.new ?? 0} new` : "failed"}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function RunDetails({ spec, status, run }: { spec: ChipSpec; status: StatusResponse; run: AgentRun | null }) {
   const next = spec.nextKey ? status.next_runs[spec.nextKey] : null;
   const duration = run ? durationSeconds(run.started_at, run.finished_at) : null;
@@ -115,6 +133,7 @@ function RunDetails({ spec, status, run }: { spec: ChipSpec; status: StatusRespo
           ))}
         </ul>
       ) : null}
+      {spec.id === "news" && run?.meta ? <NewsSources meta={run.meta} /> : null}
       {run?.error_message ? (
         <p role="alert" className="rounded border border-crit/50 bg-crit-bg p-2 text-crit">
           <span className="num font-semibold">{run.error_component ?? "unknown"}</span>:{" "}

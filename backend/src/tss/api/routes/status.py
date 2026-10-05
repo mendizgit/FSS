@@ -9,7 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tss.api.deps import get_config, get_session
 from tss.api.schemas.models import AgentRunOut, StatusOut, UniverseSummaryOut
-from tss.control.schedule import next_pipeline, next_retention, next_snapshot, next_universe
+from tss.control.schedule import (
+    next_news,
+    next_pipeline,
+    next_retention,
+    next_snapshot,
+    next_universe,
+)
 from tss.core.settings import AppConfig
 from tss.core.time import utc_now
 from tss.db.repositories import contracts as contracts_repo
@@ -55,6 +61,7 @@ async def status(session: Session, cfg: Config) -> StatusOut:
         next_runs={
             "snapshot": next_snapshot(now),
             "pipeline": next_pipeline(now),
+            "news": next_news(now),
             "retention": next_retention(now),
             "universe": next_universe(last_universe, cfg.thresholds.universe.refresh_hours, now),
         },

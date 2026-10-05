@@ -22,27 +22,27 @@ function MoverList({ title, rows, tone }: { title: string; rows: MoverRow[]; ton
           <caption className="sr-only">{title} since 00:00 UTC</caption>
           <thead>
             <tr className="text-[11px] text-muted-foreground">
-              <th scope="col" className="h-7 whitespace-nowrap px-1.5 text-left font-medium">#</th>
-              <th scope="col" className="h-7 whitespace-nowrap px-1.5 text-left font-medium">Symbol</th>
-              <th scope="col" className="h-7 whitespace-nowrap px-1.5 text-right font-medium">UTC day</th>
-              <th scope="col" className="h-7 whitespace-nowrap px-1.5 text-right font-medium">Price</th>
-              <th scope="col" className="h-7 whitespace-nowrap px-1.5 text-right font-medium">24h turnover</th>
+              <th scope="col" className="h-7 whitespace-nowrap px-1 text-left font-medium">#</th>
+              <th scope="col" className="h-7 whitespace-nowrap px-1 text-left font-medium">Symbol</th>
+              <th scope="col" className="h-7 whitespace-nowrap px-1 text-right font-medium">UTC day</th>
+              <th scope="col" className="h-7 whitespace-nowrap px-1 text-right font-medium">Price</th>
+              <th scope="col" className="h-7 whitespace-nowrap px-1 text-right font-medium">24h turnover</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.symbol} className="h-9 border-t border-border/60 hover:bg-muted/50">
-                <td className="num px-1.5 text-left text-muted-foreground">{r.rank}</td>
-                <td className="px-1.5 text-left">
+                <td className="num px-1 text-left text-muted-foreground">{r.rank}</td>
+                <td className="px-1 text-left">
                   <SymbolLabel symbol={r.symbol} hideQuote />
                 </td>
-                <td className="px-1.5 text-right">
+                <td className="px-1 text-right">
                   <Change value={r.change_pct} />
                 </td>
-                <td className="px-1.5 text-right">
+                <td className="px-1 text-right">
                   <LivePrice symbol={r.symbol} fallback={r.last_price} />
                 </td>
-                <td className="num px-1.5 text-right">{formatUsdCompact(r.fut_amount24)}</td>
+                <td className="num px-1 text-right">{formatUsdCompact(r.fut_amount24)}</td>
               </tr>
             ))}
           </tbody>

@@ -97,10 +97,17 @@ async def set_system_state(
     return changed
 
 
+MAX_NOTIFY_BYTES = 7000  # Postgres rejects NOTIFY payloads of about 8000 bytes or more
+
+
 async def notify(
     session: AsyncSession, event_type: str, ts: datetime, data: dict[str, Any]
 ) -> None:
     payload = json.dumps({"type": event_type, "ts": ts.isoformat(), "data": data}, default=str)
+    if len(payload.encode()) > MAX_NOTIFY_BYTES:  # keep the event, drop the oversized detail
+        payload = json.dumps(
+            {"type": event_type, "ts": ts.isoformat(), "data": {"truncated": True}}
+        )
     await session.execute(text("SELECT pg_notify(:ch, :p)"), {"ch": CHANNEL, "p": payload})
 
 

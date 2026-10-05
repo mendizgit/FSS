@@ -123,3 +123,18 @@ export interface MoversResponse {
 export interface ApiErrorBody {
   error: { code: string; message: string; component: string };
 }
+
+export interface NewsItem {
+  id: number;
+  source: string;
+  title: string;
+  url: string;
+  published_at: string | null;
+  fetched_at: string;
+  symbols: string[];
+}
+
+export interface NewsResponse {
+  symbol: string | null;
+  items: NewsItem[];
+}

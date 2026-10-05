@@ -8,6 +8,7 @@ import type {
   DiscoveryResponse,
   HistoryResponse,
   MoversResponse,
+  NewsResponse,
   StatusResponse,
   WindowId,
 } from "@/types/api";
@@ -50,5 +51,13 @@ export function useHistory(symbol: string | null, window: WindowId) {
         signal,
       ),
     enabled: symbol !== null,
+  });
+}
+
+export function useNews(symbol: string | null) {
+  return useQuery({
+    queryKey: ["news", symbol],
+    queryFn: ({ signal }) =>
+      apiGet<NewsResponse>(`/news?limit=60${symbol ? `&symbol=${encodeURIComponent(symbol)}` : ""}`, signal),
   });
 }

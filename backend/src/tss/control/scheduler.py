@@ -38,6 +38,15 @@ def build_scheduler(controller: Controller) -> AsyncIOScheduler:
         **common,
     )
     scheduler.add_job(
+        controller.news_job,
+        "cron",
+        minute="*/15",
+        second=50,
+        id="news",
+        misfire_grace_time=450,
+        **common,
+    )
+    scheduler.add_job(
         controller.retention_job,
         "cron",
         hour=0,

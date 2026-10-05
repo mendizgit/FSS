@@ -17,6 +17,11 @@ def next_pipeline(now: datetime) -> datetime:
     return run
 
 
+def next_news(now: datetime) -> datetime:
+    """15-minute boundary + 50 s (same rule as the pipeline, different offset)."""
+    return next_boundary(now - timedelta(seconds=50), 15) + timedelta(seconds=50)
+
+
 def next_retention(now: datetime) -> datetime:
     today = utc_day_start(now) + timedelta(minutes=30)
     return today if today > now else today + timedelta(days=1)

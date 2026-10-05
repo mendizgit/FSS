@@ -13,6 +13,7 @@ const INVALIDATIONS: Record<string, string[][]> = {
   movers_updated: [["movers"]],
   agent_status: [["status"]],
   system_state: [["status"]],
+  news_new: [["news"]],
 };
 
 export function useLiveEvents(): void {

@@ -50,8 +50,8 @@ plugins = ["pydantic.mypy"]
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = "apscheduler.*"
-ignore_missing_imports = true  # APScheduler 3.x ships no stubs
+module = ["apscheduler.*", "feedparser.*"]
+ignore_missing_imports = true  # APScheduler 3.x and feedparser ship no stubs
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

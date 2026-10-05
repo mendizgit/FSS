@@ -1,5 +1,6 @@
 # RSS sources (Arch §3.3). URLs are verified by scripts/preflight.py.
-# CryptoPanic is optional and enabled only when CRYPTOPANIC_API_KEY is set and preflight succeeds.
+# CryptoPanic is optional (needs CRYPTOPANIC_API_KEY). Its API endpoint and free-tier terms are
+# NOT verified, so the news agent does not call it yet (see agent-kit/MEMORY.md).
 rss:
   - { name: CoinDesk,      url: "https://www.coindesk.com/arc/outboundfeeds/rss", enabled: true }
   - { name: Cointelegraph, url: "https://cointelegraph.com/rss",                  enabled: true }
@@ -7,4 +8,7 @@ rss:
   - { name: The Block,     url: "https://www.theblock.co/rss.xml",                enabled: true }
 cryptopanic:
   enabled: true                     # still requires CRYPTOPANIC_API_KEY
-symbol_stoplist: []                 # tickers that collide with common words; filled in F8
+# Base coins never tagged: tickers that are plain English words or common finance acronyms in
+# ALL-CAPS text. Matching is whole-word and case-sensitive, so this only matters for upper-case
+# headlines. Edit freely; it only changes which symbol chips appear on news items.
+symbol_stoplist: [THE, ALL, NOT, ONE, TRY, ATH, EUR, SPY, GAS, RED, HOT, SUN, MET, SENT, PAID, TAKE, PLAY]

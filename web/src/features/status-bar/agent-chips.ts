@@ -20,7 +20,7 @@ export const CHIPS: ChipSpec[] = [
     nextKey: "pipeline",
     note: "Kline sync → Pool → Selection → Classification",
   },
-  { id: "news", label: "News", agent: null, nextKey: null, note: "Phase 3" },
+  { id: "news", label: "News", agent: "news", nextKey: "news", note: "RSS sources, every 15 min" },
   { id: "signals", label: "Signals", agent: null, nextKey: null, note: "Phase 4" },
 ];
 

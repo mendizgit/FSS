@@ -65,7 +65,9 @@ class HttpClient:
         jitter: Callable[[], float] = random.random,
     ) -> None:
         self._client = client or httpx.AsyncClient(
-            timeout=TIMEOUT, headers={"User-Agent": "tss/0.1 (market analysis)"}
+            timeout=TIMEOUT,
+            headers={"User-Agent": "tss/0.1 (market analysis)"},
+            follow_redirects=True,
         )
         self._limiters = {host: RateLimiter(rps) for host, rps in rps_by_host.items()}
         self._sleep = sleep
@@ -83,6 +85,48 @@ class HttpClient:
         operation: str,
         params: dict[str, Any] | None = None,
     ) -> Any:
+        resp = await self._request(url, component=component, operation=operation, params=params)
+        try:
+            return resp.json()
+        except ValueError as exc:  # invalid JSON body
+            path = urlsplit(url).path
+            raise DataSourceError(
+                component,
+                PHASE,
+                operation,
+                f"response from {path} is not valid JSON",
+                {"endpoint": path},
+            ) from exc
+
+    async def get_bytes(
+        self,
+        url: str,
+        *,
+        component: str,
+        operation: str,
+        max_bytes: int = 5_000_000,
+    ) -> bytes:
+        """Raw body (e.g. an RSS feed), capped in size. Same retry/limiter/error rules."""
+        resp = await self._request(url, component=component, operation=operation, params=None)
+        if len(resp.content) > max_bytes:
+            path = urlsplit(url).path
+            raise DataSourceError(
+                component,
+                PHASE,
+                operation,
+                f"response from {path} exceeds {max_bytes} bytes",
+                {"endpoint": path},
+            )
+        return resp.content
+
+    async def _request(
+        self,
+        url: str,
+        *,
+        component: str,
+        operation: str,
+        params: dict[str, Any] | None,
+    ) -> httpx.Response:
         parts = urlsplit(url)
         path = parts.path
         limiter = self._limiters.get(parts.netloc)
@@ -100,7 +144,7 @@ class HttpClient:
                     delay = _retry_after(resp)
                 else:
                     resp.raise_for_status()
-                    return resp.json()
+                    return resp
             except httpx.HTTPStatusError as exc:
                 raise DataSourceError(
                     component,
@@ -108,14 +152,6 @@ class HttpClient:
                     operation,
                     f"HTTP {exc.response.status_code} from {path}",
                     {"endpoint": path, "status": exc.response.status_code},
-                ) from exc
-            except ValueError as exc:  # invalid JSON body
-                raise DataSourceError(
-                    component,
-                    PHASE,
-                    operation,
-                    f"response from {path} is not valid JSON",
-                    {"endpoint": path},
                 ) from exc
             except httpx.TransportError as exc:
                 last = type(exc).__name__
