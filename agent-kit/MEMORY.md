@@ -1,20 +1,18 @@
 # MEMORY — TSS progress (single file · edit changed lines only · max 150 lines)
 
-updated: 2026-10-05 | commit: fe153a9 | phase: P5 | status: AWAITING_REVIEW
+updated: 2026-10-06 | commit: b3c40ba | phase: P5 | status: AWAITING_REVIEW
 
 ## Next step
-- Stack rebuilt with quiet hours + selection changes; Telegram stays paused during observation.
-- Restart worker+api to apply latency/selection change (`docker compose up -d --build worker api`), then observe. Open: Q3 (alerts BUY/SELL only?), top_n 20 may now cap selection.
-- Telegram alerts are PAUSED (TELEGRAM_ALERTS=off in .env; set `on` + `docker compose up -d worker api` to resume). Waiting for user decision on alert latency options (see Blockers). Open: TV parity exports (F9), coin-name news tagging, CryptoPanic, zero_fee cadence, Float vs numeric, preflight wording.
+- Stack is running the latest code. Telegram PAUSED (resume with the header Telegram button; it overrides TELEGRAM_ALERTS=off in .env). Verify after 06:00 IST: quiet-hours resume, universe_resume cron, Zone column fills, alert volume (TD on 5m+15m). Open: TV parity exports (F9), coin-name news tagging, CryptoPanic, zero_fee cadence, Float vs numeric, preflight wording.
 
 ## Features (TODO / WIP / DONE / BLOCKED)
 F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 DONE(news/signals = module-off placeholders) · F8 DONE · F9 BUILT(parity UNPROVEN) · F10 DONE(live) · F11 DONE · F12 DONE(data)
 
 ## Blockers / questions for user
-- ALERT LATENCY (decide): SKY_USDT bullT on the 15m bar closed 17:00 IST was alerted at 17:20 IST. Cause: alerts/signals only cover momentum-selected + pinned + majors symbols; SKY was first selected by the 17:15 cycle, and the 17:15:30 signal run started before the cycle persisted its selection, so SKY was first computed at 17:20:30 (event found in last-3-bars lookback, within 30 min freshness window). Pipeline itself is not slow (tracked symbols alert within ~30 s of bar close). Options: (1) run signal job right after each 15-min pipeline (saves ~4 min, safe); (2) track all ~155 liquid symbols on 15m+1h and alert BUY/SELL only (~2 alerts/h est.; +~150 kline req per 15 min, +~150 MB RAM; bullT/bearT everywhere ~30/h = too noisy); (3) add `Bar closed : HH:MM IST` line back to alerts; (4) drop alerts older than ~1 bar + 2 min. Recommended: 1 + 3, optionally 2. User has not chosen yet.
+- ALERT LATENCY: resolved 2026-10-06 (signal job runs right after each pipeline + every 5 min at +20 s; alert drops older than the freshness window). Observe live.
 
 ## Log (newest first · max 10 lines · delete oldest)
-- 2026-10-06 zone_position restored (column+API+GUI, migration c5a2d7e91f08), NOT committed; telegram TD/5m+15m/bar-close committed as 6d6feb4
+- 2026-10-06 zone_position restored (column+API+GUI, migration c5a2d7e91f08) committed b3c40ba; telegram TD/5m+15m/bar-close committed as 6d6feb4
 - 2026-10-06 signals cleanup: dropped 10 derived columns (migration b3e8f01c6d44) + API/GUI/SignalSnapshot; kept m_trend/last_event/bars_ago/against_htf/price_vs_vwap; sim_config disables quiet hours so sims are clock-independent; pytest 75, all sims pass
 - 2026-10-06 persistent flags: control_flags table + migration 7a1d3c9e5b20, control/flags.py, api/routes/flags.py (POST /api/flags/{news|telegram}), status.flags, header buttons; worker builds Telegram client whenever creds exist, notifier gated per run by flag (flag overrides TELEGRAM_ALERTS env; no row = env); pytest 75, sims pass (telegram 30)
 - 2026-10-05 user: universe also pauses in quiet hours (cron universe_resume 06:00 IST); top_n 20->30; News panel toggle in status bar (localStorage tss-news-open), wider Signals column when hidden
