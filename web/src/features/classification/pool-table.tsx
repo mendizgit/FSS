@@ -3,6 +3,7 @@
 import { Check, X } from "lucide-react";
 
 import { Change } from "@/components/tss/change";
+import { LiveDayChange } from "@/components/tss/live-day-change";
 import { LivePrice } from "@/components/tss/live-price";
 import { SymbolLabel } from "@/components/tss/symbol-label";
 import { useSort } from "@/hooks/use-sort";
@@ -70,7 +71,7 @@ export function PoolTable({ rows }: { rows: DiscoveryRow[] }) {
             </td>
             <td className="num px-2 text-right">{r.selection_rank ?? "—"}</td>
             <td className="px-2 text-right">
-              <Change value={r.utc_day_change_pct} />
+              <LiveDayChange symbol={r.symbol} dayOpen={r.day_open} fallback={r.utc_day_change_pct} />
             </td>
             <td className="num px-2 text-right">{formatUsdCompact(r.fut_amount24)}</td>
             <td className="num px-2 text-right">{formatUsdCompact(r.oi_notional_usdt)}</td>

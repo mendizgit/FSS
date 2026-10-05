@@ -59,6 +59,10 @@ class UniverseCfg(_Strict):
     pinned_symbols: list[str]
 
 
+class SignalsCfg(_Strict):
+    majors: list[str]
+
+
 class LiquidityCfg(_Strict):
     min_turnover_24h_usdt: float = Field(ge=0)
     min_oi_notional_usdt: float = Field(ge=0)
@@ -111,6 +115,7 @@ class MexcCfg(_Strict):
 
 class Thresholds(_Strict):
     universe: UniverseCfg
+    signals: SignalsCfg
     liquidity: LiquidityCfg
     kline: KlineCfg
     momentum: MomentumCfg

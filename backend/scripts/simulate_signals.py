@@ -265,6 +265,13 @@ async def scenario_main(cfg: AppConfig, dsn: str) -> None:
         code == 200 and [s["symbol"] for s in syms] == ["BTC_USDT", "ETH_USDT", "AAA_USDT"],
         str([s["symbol"] for s in syms]),
     )
+    groups = {s["symbol"]: s["group"] for s in syms}
+    check(
+        "BTC/ETH are in the 'majors' group, selected AAA in 'momentum'; configured majors that "
+        "are not active contracts (SOL, XRP here) are ignored",
+        groups == {"BTC_USDT": "majors", "ETH_USDT": "majors", "AAA_USDT": "momentum"},
+        str(groups),
+    )
     check(
         "each symbol lists 5m, 15m, 1h rows in order",
         all([r["timeframe"] for r in s["rows"]] == ["5m", "15m", "1h"] for s in syms),

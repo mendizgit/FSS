@@ -46,6 +46,7 @@ async def discovery_latest(
             oi_notional_usdt=s.oi_notional_usdt if s else None,
             funding_rate=s.funding_rate if s else None,
             utc_day_change_pct=pct_change(s.last_price if s else None, opens.get(symbol)),
+            day_open=opens.get(symbol),
             pool_rank=m.pool_rank if m else None,
             passed_gate2=bool(m.passed_gate2) if m else False,
             selection_rank=m.selection_rank if m else None,

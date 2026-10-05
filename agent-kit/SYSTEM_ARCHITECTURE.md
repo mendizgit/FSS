@@ -442,6 +442,8 @@ universe:
   quote_asset: USDT
   refresh_hours: 6
   pinned_symbols: [BTC_USDT, ETH_USDT]
+signals:
+  majors: [BTC_USDT, ETH_USDT, SOL_USDT, XRP_USDT]   # always computed; dashboard "Majors" tab
 liquidity:
   min_turnover_24h_usdt: 1000000
   min_oi_notional_usdt: 500000

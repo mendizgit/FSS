@@ -7,6 +7,7 @@ import { Tip } from "@/components/tss/tip";
 import { TimeText } from "@/components/tss/time-text";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useStatus } from "@/hooks/use-queries";
+import { useTickAgeSeconds } from "@/hooks/use-tick-age";
 import { useWsStatus } from "@/hooks/use-ws";
 import { formatBytes } from "@/lib/format";
 import { durationSeconds } from "@/lib/time";
@@ -60,8 +61,10 @@ function WsIndicator() {
   } as const;
   const m = map[ws];
   const Icon = m.icon;
+  const age = useTickAgeSeconds();
+  const tickText = age === null ? "no price tick yet" : age <= 1 ? "last price tick just now" : `last price tick ${age}s ago`;
   return (
-    <Tip content="Live updates over WebSocket (prices tick about once a second)" focusable>
+    <Tip content={`Live updates over WebSocket: ${tickText}. Prices tick about once a second; analysis panels refresh as soon as the backend finishes a cycle.`} focusable>
       <span className={cn("inline-flex items-center gap-1 text-xs font-medium", m.tone)}>
         <Icon aria-hidden className="size-3.5" />
         {m.text}

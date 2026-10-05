@@ -1,7 +1,8 @@
 """F6 Live Ticker Gateway: MEXC futures WS -> throttled `ticker` events on the hub.
 
-Subscribes `sub.ticker` for selected + pinned symbols, pings to keep the socket alive,
-reconnects with backoff, re-subscribes on `cycle_complete`. Ticks are never persisted.
+Subscribes `sub.ticker` for every symbol the dashboard shows, pings to keep the socket alive,
+reconnects with backoff, re-subscribes on `cycle_complete` and `movers_updated`.
+Ticks are never persisted.
 """
 
 from __future__ import annotations
@@ -74,7 +75,7 @@ class TickerGateway:
         hub.add_listener(self._on_event)
 
     def _on_event(self, event: dict[str, Any]) -> None:
-        if event.get("type") == "cycle_complete":
+        if event.get("type") in ("cycle_complete", "movers_updated"):
             self._resubscribe.set()
 
     async def _sync_subscriptions(self, ws: Any) -> None:

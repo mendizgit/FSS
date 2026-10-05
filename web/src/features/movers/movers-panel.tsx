@@ -2,7 +2,7 @@
 
 import { Panel } from "@/components/layout/panel";
 import { PanelEmpty, PanelError, PanelLoading, PanelWarming, StaleBadge } from "@/components/layout/states";
-import { Change } from "@/components/tss/change";
+import { LiveDayChange } from "@/components/tss/live-day-change";
 import { LivePrice } from "@/components/tss/live-price";
 import { SymbolLabel } from "@/components/tss/symbol-label";
 import { TimeText } from "@/components/tss/time-text";
@@ -37,7 +37,7 @@ function MoverList({ title, rows, tone }: { title: string; rows: MoverRow[]; ton
                   <SymbolLabel symbol={r.symbol} hideQuote />
                 </td>
                 <td className="px-1 text-right">
-                  <Change value={r.change_pct} />
+                  <LiveDayChange symbol={r.symbol} dayOpen={r.day_open} fallback={r.change_pct} />
                 </td>
                 <td className="px-1 text-right">
                   <LivePrice symbol={r.symbol} fallback={r.last_price} />

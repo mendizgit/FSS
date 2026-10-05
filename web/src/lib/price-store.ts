@@ -17,6 +17,7 @@ export function applyTick(event: TickerEvent): void {
   if (prev && prev.price === price) return;
   ticks.set(symbol, { price, previous: prev?.price ?? null, at: Date.now() });
   listeners.get(symbol)?.forEach((l) => l());
+  noteTick();
 }
 
 export function subscribeTick(symbol: string, listener: () => void): () => void {
@@ -33,4 +34,24 @@ export function subscribeTick(symbol: string, listener: () => void): () => void 
 
 export function getTick(symbol: string): LiveTick | undefined {
   return ticks.get(symbol);
+}
+
+// Any tick at all (for the "last price tick" freshness cue in the status bar).
+let lastTickAt = 0;
+const anyListeners = new Set<() => void>();
+
+export function noteTick(): void {
+  lastTickAt = Date.now();
+  anyListeners.forEach((l) => l());
+}
+
+export function subscribeAnyTick(listener: () => void): () => void {
+  anyListeners.add(listener);
+  return () => {
+    anyListeners.delete(listener);
+  };
+}
+
+export function getLastTickAt(): number {
+  return lastTickAt;
 }

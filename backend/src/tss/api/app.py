@@ -25,7 +25,7 @@ from tss.core.time import utc_now
 from tss.db.session import create_engine, create_session_factory
 from tss.realtime.hub import EventHub
 from tss.realtime.notify import asyncpg_dsn, listen_loop
-from tss.realtime.symbols import live_symbols
+from tss.realtime.symbols import ticker_symbols
 from tss.realtime.ticker_gateway import TickerGateway
 
 COMPONENT = "api"
@@ -48,7 +48,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         engine = create_engine(cfg.settings)
         factory = create_session_factory(engine)
         hub = EventHub()
-        gateway = TickerGateway(hub, lambda: live_symbols(factory))
+        majors = cfg.thresholds.signals.majors
+        gateway = TickerGateway(hub, lambda: ticker_symbols(factory, majors))
         app.state.engine = engine
         app.state.session_factory = factory
         app.state.hub = hub

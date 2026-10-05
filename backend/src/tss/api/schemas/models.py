@@ -63,6 +63,7 @@ class DiscoveryRow(BaseModel):
     oi_notional_usdt: float | None
     funding_rate: float | None
     utc_day_change_pct: float | None
+    day_open: float | None
     pool_rank: int | None
     passed_gate2: bool
     selection_rank: int | None
@@ -176,6 +177,7 @@ class SignalRowOut(BaseModel):
 
 class SignalSymbolOut(BaseModel):
     symbol: str
+    group: str  # "majors" | "momentum"
     pinned: bool
     selection_rank: int | None
     rows: list[SignalRowOut]

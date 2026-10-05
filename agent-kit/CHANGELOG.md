@@ -1,5 +1,9 @@
 # Agent Kit Changelog
 
+## v1.3.2 — 2026-10-05 (user-requested dashboard change)
+- New config `signals.majors` (BTC, ETH, SOL, XRP): their signals are always computed and shown on a new "Majors" tab of the Signals panel; the "Momentum" tab shows the selected symbols. `/api/signals/latest` rows carry `group`.
+- Live ticker now subscribes to every price shown (selected, pinned, majors, movers, pool) and re-subscribes on `movers_updated`; movers / pool day-change is recomputed live from the tick and the day open.
+
 ## v1.3.1 — 2026-10-05 (P0 preflight findings)
 - Arch §3.1: kline `time` is in seconds; the last bar returned can be the forming one (drop it, per §5.2).
 - LAN port: host/LAN port is now 8088 (8080 is used by another local app). Caddy still listens on :8080 inside its container; compose maps `<UBUNTU_LAN_IP>:8088:8080`. Updated Arch §2/§12 text, ER §12/§16, skills/deployment.md, README.

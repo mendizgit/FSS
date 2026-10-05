@@ -377,7 +377,16 @@ async def scenario_cap_and_config(cfg: AppConfig) -> None:
     await c2.signal_job()
     check("Telegram enabled: the notifier runs right after the signal run", len(tg2.delivered) == 1)
 
-    st = await sf.api_status(cfg)
+    off_settings = cfg.settings.model_copy(
+        update={"telegram_bot_token": None, "telegram_chat_id": None}
+    )
+    off_cfg = AppConfig(
+        settings=off_settings,
+        thresholds=cfg.thresholds,
+        denylist=cfg.denylist,
+        news_sources=cfg.news_sources,
+    )
+    st = await sf.api_status(off_cfg)  # explicit "no credentials", independent of the real .env
     check(
         "/api/status reports telegram_configured=false without credentials",
         st.get("telegram_configured") is False,

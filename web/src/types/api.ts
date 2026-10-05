@@ -46,6 +46,7 @@ export interface DiscoveryRow {
   oi_notional_usdt: number | null;
   funding_rate: number | null;
   utc_day_change_pct: number | null;
+  day_open: number | null;
   pool_rank: number | null;
   passed_gate2: boolean;
   selection_rank: number | null;
@@ -165,6 +166,7 @@ export interface SignalRow {
 
 export interface SignalSymbol {
   symbol: string;
+  group: "majors" | "momentum";
   pinned: boolean;
   selection_rank: number | null;
   rows: SignalRow[];

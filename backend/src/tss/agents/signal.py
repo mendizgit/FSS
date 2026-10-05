@@ -201,7 +201,8 @@ class SignalAgent(BaseAgent):
         self._cache.merge(symbol, tf, fresh)
 
     async def run(self, cycle_id: uuid.UUID, now: datetime) -> AgentResult:
-        symbols = sorted(await live_symbols(self.deps.session_factory))
+        majors = self.deps.config.thresholds.signals.majors
+        symbols = sorted(await live_symbols(self.deps.session_factory, majors))
         if not symbols:
             return AgentResult(status=SKIPPED, meta={"reason": "no_symbols"})
         self._cache.prune(set(symbols))

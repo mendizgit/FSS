@@ -52,3 +52,10 @@ export function directionOf(value: number | null | undefined): "up" | "down" | "
   if (value === null || value === undefined || !Number.isFinite(value) || value === 0) return "flat";
   return value > 0 ? "up" : "down";
 }
+
+/** ((now / then) - 1) * 100, as the backend does; null if either value is unusable. */
+export function pctChange(now: number | null | undefined, then: number | null | undefined): number | null {
+  if (now === null || now === undefined || then === null || then === undefined) return null;
+  if (!Number.isFinite(now) || !Number.isFinite(then) || then <= 0) return null;
+  return (now / then - 1) * 100;
+}
