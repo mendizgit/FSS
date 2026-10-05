@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -13,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from tss.agents.base import is_db_unreachable
+from tss.api import ws as ws_routes
 from tss.api.routes import classification, discovery, movers, status
 from tss.api.routes import config as config_routes
 from tss.core.errors import TSSError
@@ -20,6 +23,10 @@ from tss.core.logging import configure_logging, get_logger
 from tss.core.settings import AppConfig, load_config_or_exit
 from tss.core.time import utc_now
 from tss.db.session import create_engine, create_session_factory
+from tss.realtime.hub import EventHub
+from tss.realtime.notify import asyncpg_dsn, listen_loop
+from tss.realtime.symbols import live_symbols
+from tss.realtime.ticker_gateway import TickerGateway
 
 COMPONENT = "api"
 
@@ -39,12 +46,28 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine = create_engine(cfg.settings)
+        factory = create_session_factory(engine)
+        hub = EventHub()
+        gateway = TickerGateway(hub, lambda: live_symbols(factory))
         app.state.engine = engine
-        app.state.session_factory = create_session_factory(engine)
-        log.info("api started", component=COMPONENT, phase="P1", op="startup")
+        app.state.session_factory = factory
+        app.state.hub = hub
+        app.state.gateway = gateway
+        tasks = [
+            asyncio.create_task(
+                listen_loop(asyncpg_dsn(cfg.settings.database_url.get_secret_value()), hub)
+            ),
+            asyncio.create_task(gateway.run()),
+        ]
+        log.info("api started", component=COMPONENT, phase="P2", op="startup")
         try:
             yield
         finally:
+            for task in tasks:
+                task.cancel()
+            for task in tasks:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
             await engine.dispose()
 
     app = FastAPI(title="TSS API", lifespan=lifespan, docs_url=None, redoc_url=None)
@@ -114,4 +137,5 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     for module in (status, discovery, classification, movers, config_routes):
         app.include_router(module.router, prefix="/api")
+    app.include_router(ws_routes.router)
     return app

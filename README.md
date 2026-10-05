@@ -28,8 +28,9 @@ docker compose -f docker-compose.dev.yml up -d db
 cd backend && uv sync && uv run alembic upgrade head
 uv run python -m tss.entrypoints.worker
 uv run uvicorn tss.entrypoints.api:app --host 127.0.0.1 --port 8000
-cd web && pnpm install && pnpm dev
+cd web && pnpm install && API_ORIGIN=http://127.0.0.1:8000 NEXT_PUBLIC_WS_URL=ws://127.0.0.1:8000/ws pnpm dev
 ```
+In dev, `API_ORIGIN` proxies `/api` to the local API; the browser connects to `/ws` directly through `NEXT_PUBLIC_WS_URL` (Next does not proxy WebSockets). In production Caddy routes `/api/*` and `/ws` to the api service, so neither variable is set.
 
 ## Production run
 ```bash
