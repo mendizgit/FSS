@@ -21,7 +21,7 @@ export const CHIPS: ChipSpec[] = [
     note: "Kline sync → Pool → Selection → Classification",
   },
   { id: "news", label: "News", agent: "news", nextKey: "news", note: "RSS sources, every 15 min" },
-  { id: "signals", label: "Signals", agent: null, nextKey: null, note: "Phase 4" },
+  { id: "signals", label: "Signals", agent: "signal", nextKey: "signal", note: "FGI Replica V3, every 5 min" },
 ];
 
 export const PIPELINE_STEPS = ["kline_sync", "momentum", "classification"] as const;

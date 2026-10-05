@@ -14,6 +14,7 @@ const INVALIDATIONS: Record<string, string[][]> = {
   agent_status: [["status"]],
   system_state: [["status"]],
   news_new: [["news"]],
+  signal_new: [["signals"]],
 };
 
 export function useLiveEvents(): void {

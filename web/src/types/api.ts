@@ -138,3 +138,38 @@ export interface NewsResponse {
   symbol: string | null;
   items: NewsItem[];
 }
+
+export type SignalTimeframe = "5m" | "15m" | "1h";
+
+export interface SignalRow {
+  timeframe: SignalTimeframe;
+  bar_close_time: string;
+  m_trend: string;
+  last_event: string;
+  bars_ago: number | null;
+  against_htf: boolean | null;
+  htf_supertrend: string | null;
+  local_supertrend: string;
+  consolidated_trend: string;
+  long_score: number;
+  short_score: number;
+  long_grade: string;
+  short_grade: string;
+  rsi_divergence: string | null;
+  sr_letter: string | null;
+  zone_position: string | null;
+  price_vs_vwap: string | null;
+  computed_at: string;
+}
+
+export interface SignalSymbol {
+  symbol: string;
+  pinned: boolean;
+  selection_rank: number | null;
+  rows: SignalRow[];
+}
+
+export interface SignalsResponse {
+  updated_at: string | null;
+  symbols: SignalSymbol[];
+}

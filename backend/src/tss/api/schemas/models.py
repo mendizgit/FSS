@@ -150,3 +150,36 @@ class NewsItemOut(BaseModel):
 class NewsOut(BaseModel):
     symbol: str | None
     items: list[NewsItemOut]
+
+
+class SignalRowOut(BaseModel):
+    timeframe: str
+    bar_close_time: datetime
+    m_trend: str
+    last_event: str
+    bars_ago: int | None
+    against_htf: bool | None
+    htf_supertrend: str | None
+    local_supertrend: str
+    consolidated_trend: str
+    long_score: int
+    short_score: int
+    long_grade: str
+    short_grade: str
+    rsi_divergence: str | None
+    sr_letter: str | None
+    zone_position: str | None
+    price_vs_vwap: str | None
+    computed_at: datetime
+
+
+class SignalSymbolOut(BaseModel):
+    symbol: str
+    pinned: bool
+    selection_rank: int | None
+    rows: list[SignalRowOut]
+
+
+class SignalsOut(BaseModel):
+    updated_at: datetime | None
+    symbols: list[SignalSymbolOut]

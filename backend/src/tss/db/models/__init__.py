@@ -1,7 +1,4 @@
-"""Import every model so Base.metadata is complete (Alembic autogenerate relies on this).
-
-P4/P5 tables (`signals`, `signal_events`) are intentionally absent until those phases.
-"""
+"""Import every model so Base.metadata is complete (Alembic autogenerate relies on this)."""
 
 from tss.db.models.classification import Classification
 from tss.db.models.contracts import Contract
@@ -10,6 +7,7 @@ from tss.db.models.momentum import MomentumRanking
 from tss.db.models.movers import MarketMover
 from tss.db.models.news import NewsItem
 from tss.db.models.ops import AgentRun, SystemState
+from tss.db.models.signals import Signal, SignalEvent
 
 __all__ = [
     "AgentRun",
@@ -21,5 +19,7 @@ __all__ = [
     "MarketSnapshot",
     "MomentumRanking",
     "NewsItem",
+    "Signal",
+    "SignalEvent",
     "SystemState",
 ]

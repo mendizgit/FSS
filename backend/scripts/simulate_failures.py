@@ -696,7 +696,7 @@ async def reset_sim_data(scfg: AppConfig) -> None:
                 text(
                     "TRUNCATE agent_runs, system_state, market_snapshots, "
                     "klines_15m, daily_opens, momentum_rankings, classifications, "
-                    "market_movers, news_items, contracts"
+                    "market_movers, news_items, signals, signal_events, contracts"
                 )
             )
     finally:

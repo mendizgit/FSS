@@ -13,6 +13,7 @@ from tss.control.schedule import (
     next_news,
     next_pipeline,
     next_retention,
+    next_signal,
     next_snapshot,
     next_universe,
 )
@@ -62,6 +63,7 @@ async def status(session: Session, cfg: Config) -> StatusOut:
             "snapshot": next_snapshot(now),
             "pipeline": next_pipeline(now),
             "news": next_news(now),
+            "signal": next_signal(now),
             "retention": next_retention(now),
             "universe": next_universe(last_universe, cfg.thresholds.universe.refresh_hours, now),
         },

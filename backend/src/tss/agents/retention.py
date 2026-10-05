@@ -10,6 +10,7 @@ from tss.core.time import utc_date
 from tss.db.repositories import discovery as discovery_repo
 from tss.db.repositories import market as market_repo
 from tss.db.repositories import ops
+from tss.db.repositories import signals as signals_repo
 
 
 class RetentionAgent(BaseAgent):
@@ -29,5 +30,6 @@ class RetentionAgent(BaseAgent):
             }
             deleted.update(await discovery_repo.purge_older_than(session, cutoff))
             deleted.update(await ops.purge_ops(session, cutoff))
+            deleted.update(await signals_repo.purge_older_than(session, cutoff))
             await session.commit()
         return AgentResult(rows_out=sum(deleted.values()), meta={"deleted": deleted})

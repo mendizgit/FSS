@@ -9,6 +9,7 @@ import type {
   HistoryResponse,
   MoversResponse,
   NewsResponse,
+  SignalsResponse,
   StatusResponse,
   WindowId,
 } from "@/types/api";
@@ -59,5 +60,12 @@ export function useNews(symbol: string | null) {
     queryKey: ["news", symbol],
     queryFn: ({ signal }) =>
       apiGet<NewsResponse>(`/news?limit=60${symbol ? `&symbol=${encodeURIComponent(symbol)}` : ""}`, signal),
+  });
+}
+
+export function useSignals() {
+  return useQuery({
+    queryKey: ["signals"],
+    queryFn: ({ signal }) => apiGet<SignalsResponse>("/signals/latest", signal),
   });
 }

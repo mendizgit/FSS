@@ -23,6 +23,7 @@ from tss.agents.momentum import MomentumAgent
 from tss.agents.movers import MoversAgent
 from tss.agents.news import NewsAgent
 from tss.agents.retention import RetentionAgent
+from tss.agents.signal import SignalAgent
 from tss.agents.snapshot import SnapshotAgent
 from tss.agents.universe import UniverseAgent
 from tss.clients.rss import RssClient
@@ -57,6 +58,7 @@ class Controller:
                 MoversAgent(deps),
                 RetentionAgent(deps),
                 NewsAgent(deps, rss),
+                SignalAgent(deps),
             )
         }
         self.breakers = {
@@ -268,6 +270,12 @@ class Controller:
             if is_db_unreachable(exc):
                 self.halt("database unreachable (control/record_pipeline)")
 
+    async def signal_job(self) -> None:
+        async def go() -> None:
+            await self.run_agent(self.agents["signal"], uuid.uuid4(), self.clock())
+
+        await self._exclusive("signal", go)
+
     async def news_job(self) -> None:
         async def go() -> None:
             await self.run_agent(self.agents["news"], uuid.uuid4(), self.clock())
@@ -323,3 +331,4 @@ class Controller:
         await self.pipeline_job()
         await self.movers_job()  # daily opens now exist; do not wait for the next 5-min tick
         await self.news_job()  # contracts are known, so symbols can be tagged
+        await self.signal_job()  # needs the latest selection from the pipeline

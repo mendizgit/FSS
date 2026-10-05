@@ -17,6 +17,11 @@ def next_pipeline(now: datetime) -> datetime:
     return run
 
 
+def next_signal(now: datetime) -> datetime:
+    """5-minute boundary + 30 s."""
+    return next_boundary(now - timedelta(seconds=30), 5) + timedelta(seconds=30)
+
+
 def next_news(now: datetime) -> datetime:
     """15-minute boundary + 50 s (same rule as the pipeline, different offset)."""
     return next_boundary(now - timedelta(seconds=50), 15) + timedelta(seconds=50)

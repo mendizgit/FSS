@@ -1,17 +1,18 @@
 # MEMORY — TSS progress (single file · edit changed lines only · max 150 lines)
 
-updated: 2026-10-05 | commit: 03d9d1f | phase: P3 | status: AWAITING_REVIEW
+updated: 2026-10-05 | commit: 5e0ff6a | phase: P4 | status: AWAITING_REVIEW
 
 ## Next step
-- P3 complete + validated (ER §12). Waiting for user review and "commit" (P3 not committed; P2 = 03d9d1f). Decisions needed: news tagging by coin NAME (Bitcoin->BTC) vs ticker only, CryptoPanic (unverified, not implemented), stoplist review; plus older P1 items. P4 (signals) and P5 (Telegram) are gated: only on user typing "start P4" / "start P5".
+- P4 built + validated except TradingView PARITY (needs user's TV CSV exports in backend/tests/fixtures/tv/, see README there; then `uv run python scripts/parity_check.py`). Waiting for user review and "commit" (P4 not committed; P3 = 5e0ff6a). P5 (Telegram) only on "start P5". Open decisions: P3 items (coin-name tagging, CryptoPanic, stoplist) + P1 items.
 
 ## Features (TODO / WIP / DONE / BLOCKED)
-F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 DONE(news/signals = module-off placeholders) · F8 DONE · F9 BLOCKED(gated) · F10 BLOCKED(gated) · F11 DONE · F12 DONE(data)
+F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 DONE(news/signals = module-off placeholders) · F8 DONE · F9 BUILT(parity UNPROVEN) · F10 BLOCKED(gated) · F11 DONE · F12 DONE(data)
 
 ## Blockers / questions for user
 - none
 
 ## Log (newest first · max 10 lines · delete oldest)
+- 2026-10-05 P4 built: indicators/{primitives,range_filter,supertrend,divergence,zones,fgi_v3}.py (Pine port), SignalAgent (5 min +30 s, bar cache, closed bars only), signals+signal_events migration 4c7e15481f58, /api/signals/latest, Signals panel; pytest 62, simulate_signals 24/24 (+ failures 47, ticker 17, news 27); live Docker ticks ok; parity_check.py ready but NO TradingView fixtures => parity UNPROVEN
 - 2026-10-05 P3 built + validated: RSS client (feedparser) + NewsAgent (15 min, +50 s), URL dedupe/normalisation, ticker tagging, /api/news, live News panel + chip; simulate_news 27/27, simulate_failures 47/47, simulate_ticker 17/17, pytest 37, web lint/type/build ok, prod audit clean; live: 4 sources, 112 items, re-run adds 0
 - 2026-10-05 P2 built + validated: realtime (hub, LISTEN, ticker gateway, /ws), Next dashboard (shadcn/base-ui, TanStack Query, shared WS client, price store, dark/light AA tokens); simulate_ticker 17/17, simulate_failures 47/47, web lint/type/build ok, prod audit clean; verified in headless Firefox at 1920/1440/1024/mobile, live ticks update w/o refresh, NOTIFY->/ws ok in Docker
 - 2026-10-05 P1 phase-end validation passed: ruff/mypy/pip-audit clean, pytest 29, simulate_failures 47/47, alembic check clean, preflight 27/0, web lint/type/build ok, secrets scan clean, Docker stack ran scheduled :05 and :15:20 ticks; zero_fee flag is volatile on MEXC (70..507 within the hour)
@@ -21,10 +22,10 @@ F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 
 - 2026-10-05 P0 step 6 done: backend/web Dockerfiles, docker-compose.yml (name: tss), Caddyfile (validated), api /api/health + worker skeleton; images built; api health 200 db ok, web 200, worker alembic ok; NOT run: full stack (BASIC_AUTH_HASH still placeholder)
 - 2026-10-05 P0 step 5 done: web/ Next 16.3.8 + React 19 + Tailwind 4, TS strict, output standalone; pnpm lint/type-check/build pass, audit clean; state codes confirmed from MEXC docs
 - 2026-10-05 P0 step 4 done: scripts/preflight.py 27 checks, 0 failed, 3 to review (state meaning, kline cap 2000, forming bar included); ruff+mypy clean; Arch §3.1/§4 + CHANGELOG v1.3.1 edited (time unit seconds, state codes confirmed from MEXC docs)
-- 2026-10-05 P0 step 3 done: models match Arch §9; migration cdfd7a420a08 (plain sa.DateTime(tz)); upgrade/downgrade/upgrade ok, `alembic check` clean, 0 naive timestamps, 5 indexes; ruff+mypy clean; tss-db-dev running (volume tss_pgdata_dev)
 
 ## Decisions & API quirks (one line each)
 - MEXC detail zero-fee fields flicker between calls (507, 507, 451 within a minute; our 6 h refresh once caught 70); badge is display-only
+- P4 decisions: ASSUMPTION to confirm via parity: ta.pivothigh/low centre strictly beyond the left bars, >= / <= the right bars (plateau => first bar); HTF (4H SuperTrend, 1H/4H RSI) = last CLOSED HTF bar at each bar close (documented deviation); ST direction + RSI are not plotted by the Pine script so parity compares plots only (R/S/M, EMAs, VWAP, events, s/r letters); rsi_divergence = regular divergence on the newest closed bar only (POS_REG/NEG_REG); zone_position labels TOP_SUB/TOP_MAIN/MID/BOTTOM_MAIN/BOTTOM_SUB; against_htf only for BUY/SELL/BULL_T/BEAR_T (TD = NULL); events scanned on the newest 3 bars, unique key keeps inserts idempotent; min 500 bars per signal TF and 100 per HTF series else skipped with a reason; single-pivot divergence flag (confluence factor 5) stays on while its pivot condition holds, then decays 20 bars (as Pine); VWAP anchored to UTC day using kline `vol`
 - P3 decisions: news tagged by TICKER only (whole-word, case-sensitive, >=3 chars, active contracts, stoplist in news_sources.yaml); headlines usually say 'Bitcoin' not 'BTC' so many items are untagged (contract detail has baseCoinName; using it = rule change, needs approval); CryptoPanic NOT implemented: API docs unreachable, endpoint/terms unverified, and no key set; items w/ implausible future date get published_at NULL; old (>5d) items skipped; NOTIFY payloads over 7000 B are shrunk to {truncated:true}; feeds are fetched with follow_redirects
 - P2 decisions: ws events are the primary refresh trigger (60 s fallback poll), ticks only feed price store; /ws served by api process (hub + LISTEN tss_events + MEXC ticker gateway for selected+pinned); dev needs API_ORIGIN + NEXT_PUBLIC_WS_URL; layout cols 1.75/1.4/0.55 at >=1280; News/Signals panels are placeholders (F8 = P3, F9 = P4); no keepPreviousData on window toggle (avoids mislabelled numbers)
 - P1 decisions: pool_rank for pinned outside the pool = position in full RVOL ranking (>50), no row if RVOL unknown; 'active' contracts = state 0 + not denylisted + in latest universe refresh (updated_at == max); WARMING_UP system state while earliest snapshot < 4h old; TF_CONFLICT = bullish(LONG_BUILDUP,SHORT_COVERING) vs bearish(SHORT_BUILDUP,LONG_UNWINDING); kline gap check uses newest 2n bars; HTTP retries = 3 after first attempt (2/4/8 s + jitter)
@@ -60,6 +61,8 @@ F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 
 - web/src/{lib,hooks,types}/ — api-client, ws-client, price-store, time (IST only here), format, query hooks; web/src/features/{status-bar,classification,movers,signals,news}/; components/{layout,tss,ui}
 - backend/src/tss/clients/rss.py, domain/news.py, agents/news.py, db/repositories/news.py, api/routes/news.py — F8 (feeds -> news_items -> /api/news); web/src/features/news/news-panel.tsx
 - backend/scripts/simulate_news.py — F8 acceptance (throwaway DB)
+- backend/src/tss/indicators/{primitives,range_filter,supertrend,divergence,zones,fgi_v3}.py — Pine port (MPL-2.0 headers on range_filter/divergence); agents/signal.py, db/models/signals.py, db/repositories/signals.py, api/routes/signals.py; web/src/features/signals/*
+- backend/scripts/{simulate_signals,parity_check}.py, backend/tests/{test_indicator_primitives,test_indicators}.py, tests/fixtures/tv/README.md
 - backend/scripts/preflight.py — public MEXC/RSS/WS checks, prints table (exit 1 on any ✗)
 - backend/config/{thresholds,denylist,news_sources}.yaml — Arch §13 values (RSS URLs proposed, verify in preflight)
 

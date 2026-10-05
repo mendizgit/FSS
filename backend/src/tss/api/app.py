@@ -16,7 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from tss.agents.base import is_db_unreachable
 from tss.api import ws as ws_routes
-from tss.api.routes import classification, discovery, movers, news, status
+from tss.api.routes import classification, discovery, movers, news, signals, status
 from tss.api.routes import config as config_routes
 from tss.core.errors import TSSError
 from tss.core.logging import configure_logging, get_logger
@@ -135,7 +135,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             body["error"] = f"api/P1/health: database check failed ({type(exc).__name__})"
             return JSONResponse(body, status_code=503)
 
-    for module in (status, discovery, classification, movers, news, config_routes):
+    for module in (status, discovery, classification, movers, news, signals, config_routes):
         app.include_router(module.router, prefix="/api")
     app.include_router(ws_routes.router)
     return app
