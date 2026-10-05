@@ -275,6 +275,7 @@ async def scenario_main(cfg: AppConfig, dsn: str) -> None:
         "last_event",
         "bars_ago",
         "against_htf",
+        "zone_position",
         "price_vs_vwap",
         "bar_close_time",
     }

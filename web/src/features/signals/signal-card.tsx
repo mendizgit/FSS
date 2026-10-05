@@ -9,7 +9,7 @@ import { TimeText } from "@/components/tss/time-text";
 import { cn } from "@/lib/utils";
 import type { SignalRow, SignalSymbol } from "@/types/api";
 
-import { EVENT_META, TF_MINUTES } from "./meta";
+import { EVENT_META, TF_MINUTES, ZONE_LABEL } from "./meta";
 
 const TONE = { up: "text-up", down: "text-down", muted: "text-muted-foreground" } as const;
 
@@ -52,6 +52,7 @@ function EventCell({ row }: { row: SignalRow }) {
 
 function Row({ row, now }: { row: SignalRow; now: number }) {
   const ageMin = (now - new Date(row.computed_at).getTime()) / 60000;
+  const zone = row.zone_position ? ZONE_LABEL[row.zone_position] : null;
   const stale = ageMin > 3 * Math.max(TF_MINUTES[row.timeframe] ?? 5, 5) + 5;
   return (
     <tr className={cn("h-9 border-t border-border/60", stale && "opacity-60")}>
@@ -62,6 +63,15 @@ function Row({ row, now }: { row: SignalRow; now: number }) {
       </th>
       <td className="px-2"><Direction value={row.m_trend} labelUp="Up" labelDown="Down" /></td>
       <td className="px-2"><EventCell row={row} /></td>
+      <td className="px-2">
+        {zone ? (
+          <Tip content={zone.meaning} focusable>
+            <span className={cn("whitespace-nowrap", TONE[zone.tone])}>{zone.text}</span>
+          </Tip>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </td>
       <td className="px-2">
         {row.price_vs_vwap ? (
           <span className={cn("inline-flex items-center gap-0.5", row.price_vs_vwap === "ABOVE" ? "text-up" : "text-down")}>
@@ -85,11 +95,11 @@ export function SignalCard({ item, now }: { item: SignalSymbol; now: number }) {
         <LivePrice symbol={item.symbol} fallback={null} className="text-xs text-muted-foreground" />
       </header>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[360px] border-collapse text-[12px]">
+        <table className="w-full min-w-[440px] border-collapse text-[12px]">
           <thead className="sr-only">
             <tr>
               <th scope="col">Timeframe</th><th scope="col">M trend</th><th scope="col">Last event</th>
-              <th scope="col">VWAP</th>
+              <th scope="col">Zone</th><th scope="col">VWAP</th>
             </tr>
           </thead>
           <tbody>

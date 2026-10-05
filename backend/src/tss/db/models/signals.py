@@ -28,6 +28,7 @@ class Signal(Base):
     last_event: Mapped[str] = mapped_column(String(8))
     bars_ago: Mapped[int | None] = mapped_column(Integer, nullable=True)
     against_htf: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    zone_position: Mapped[str | None] = mapped_column(String(16), nullable=True)
     price_vs_vwap: Mapped[str | None] = mapped_column(String(8), nullable=True)
     computed_at: Mapped[datetime] = mapped_column(UTCDateTime)
 

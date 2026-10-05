@@ -221,6 +221,7 @@ def test_snapshot_values_are_consistent() -> None:
     assert snap.m_trend in ("UP", "DOWN")
     assert snap.last_event in ("BUY", "SELL", "BULL_T", "BEAR_T", "TD_BULL", "TD_BEAR", "NONE")
     assert (snap.last_event == "NONE") == (snap.bars_ago is None)
+    assert snap.zone_position in (None, "TOP_SUB", "TOP_MAIN", "MID", "BOTTOM_MAIN", "BOTTOM_SUB")
     assert snap.price_vs_vwap in ("ABOVE", "BELOW")
     events = recent_events(bars, s, timedelta(minutes=5), 700)
     if events:

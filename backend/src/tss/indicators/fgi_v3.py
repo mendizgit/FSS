@@ -31,7 +31,7 @@ from tss.indicators.primitives import (
 )
 from tss.indicators.range_filter import RangeFilterParams, range_filter
 from tss.indicators.supertrend import supertrend
-from tss.indicators.zones import ZoneParams, zones
+from tss.indicators.zones import ZoneParams, zone_position, zones
 
 EVENTS = ("BUY", "SELL", "BULL_T", "BEAR_T", "TD_BULL", "TD_BEAR")  # priority within one bar
 
@@ -394,6 +394,7 @@ class SignalSnapshot:
     last_event: str
     bars_ago: int | None
     against_htf: bool | None
+    zone_position: str | None
     price_vs_vwap: str | None
 
 
@@ -401,8 +402,10 @@ def snapshot(
     bars: Bars,
     s: FgiSeries,
     tf_delta: timedelta,
+    params: FgiParams | None = None,
 ) -> SignalSnapshot:
     """Values for the newest (closed) bar."""
+    p = params or FgiParams()
     i = len(bars) - 1
     last_event = "NONE"
     bars_ago: int | None = None
@@ -420,6 +423,7 @@ def snapshot(
         last_event=last_event,
         bars_ago=bars_ago,
         against_htf=against,
+        zone_position=zone_position(c, s.zone_c[i], s.zone_b[i], p.zone),
         price_vs_vwap=None if isnan(vw) else ("ABOVE" if c >= vw else "BELOW"),
     )
 

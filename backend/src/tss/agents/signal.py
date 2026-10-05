@@ -113,7 +113,7 @@ def compute_symbol(
         bars = to_bars(bars_list)
         htf = build_htf_context(bars, delta, bars_1h, bars_4h, params)
         result = compute(bars, htf, params)
-        snap = snapshot(bars, result, delta)
+        snap = snapshot(bars, result, delta, params)
         out.rows.append(
             {
                 "symbol": symbol,
@@ -123,6 +123,7 @@ def compute_symbol(
                 "last_event": snap.last_event,
                 "bars_ago": snap.bars_ago,
                 "against_htf": snap.against_htf,
+                "zone_position": snap.zone_position,
                 "price_vs_vwap": snap.price_vs_vwap,
                 "computed_at": now,
             }

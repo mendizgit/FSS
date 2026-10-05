@@ -163,6 +163,7 @@ class SignalRowOut(BaseModel):
     last_event: str
     bars_ago: int | None
     against_htf: bool | None
+    zone_position: str | None
     price_vs_vwap: str | None
     computed_at: datetime
 

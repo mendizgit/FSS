@@ -40,6 +40,7 @@ async def signals_latest(
                 last_event=r.last_event,
                 bars_ago=r.bars_ago,
                 against_htf=r.against_htf,
+                zone_position=r.zone_position,
                 price_vs_vwap=r.price_vs_vwap,
                 computed_at=r.computed_at,
             )

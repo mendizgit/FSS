@@ -152,6 +152,7 @@ export interface SignalRow {
   last_event: string;
   bars_ago: number | null;
   against_htf: boolean | null;
+  zone_position: string | null;
   price_vs_vwap: string | null;
   computed_at: string;
 }
