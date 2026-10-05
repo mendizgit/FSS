@@ -189,12 +189,12 @@ rvol_15m             = amount[last_closed] / median(amount[last_closed − 96 �
 ```
 
 - `rvol_15m` is `None` if fewer than `momentum.rvol_lookback_bars` (96) prior bars exist, or if the median is 0.
-- **Pool:** rank by `rvol_15m` desc (tie-break: |price_change_15m_pct| desc) and take the top `momentum.pool_size` (50).
+- **Pool:** rank by `rvol_15m` desc (tie-break: |price_change_15m_pct| desc) and take the top `momentum.pool_size` (80 since v1.3.3).
 
 ### 5.4 Momentum selection — top 20 (Gate 2)
 
-- Keep pool members with `|price_change_15m_pct| ≥ 1.5` **AND** `rvol_15m ≥ 1.5`.
-- Rank by `rvol_15m` desc and take the top `momentum.top_n` (20).
+- Keep pool members with `|price_change_15m_pct| ≥ 0.8` **AND** `rvol_15m ≥ 1.2` (v1.3.3).
+- Rank by `rvol_15m` desc and take the top `momentum.top_n` (30 since v1.3.3).
 - If fewer qualify, select fewer. **Never backfill.**
 - Pinned symbols are added for classification regardless of the result.
 
@@ -451,11 +451,11 @@ kline:
   interval: Min15
   backfill_bars: 200
 momentum:
-  pool_size: 50
+  pool_size: 80
   rvol_lookback_bars: 96
-  min_rvol: 1.5
-  min_abs_price_change_15m_pct: 1.5
-  top_n: 20
+  min_rvol: 1.2
+  min_abs_price_change_15m_pct: 0.8
+  top_n: 30
   rank_by: rvol_15m
 movers:
   top_n: 10

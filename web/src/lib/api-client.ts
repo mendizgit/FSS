@@ -16,9 +16,21 @@ export class ApiError extends Error {
 }
 
 export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return request<T>(path, { signal, headers: { Accept: "application/json" } });
+}
+
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function request<T>(path: string, init: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`/api${path}`, { signal, headers: { Accept: "application/json" } });
+    response = await fetch(`/api${path}`, init);
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
     throw new ApiError(0, "network", "The dashboard cannot reach the API", "network");

@@ -191,14 +191,7 @@ async def scenario_main(cfg: AppConfig, dsn: str) -> None:
     )
     check(
         "row values are well formed",
-        all(
-            r.m_trend in ("UP", "DOWN")
-            and 0 <= r.long_score <= 6
-            and 0 <= r.short_score <= 6
-            and r.long_grade in "ABC"
-            and r.local_supertrend in ("BULL", "BEAR")
-            for r in rows
-        ),
+        all(r.m_trend in ("UP", "DOWN") for r in rows),
     )
     sig_events = [e for e in events if e["type"] == "signal_new"]
     check(
@@ -282,16 +275,6 @@ async def scenario_main(cfg: AppConfig, dsn: str) -> None:
         "last_event",
         "bars_ago",
         "against_htf",
-        "htf_supertrend",
-        "local_supertrend",
-        "consolidated_trend",
-        "long_score",
-        "short_score",
-        "long_grade",
-        "short_grade",
-        "rsi_divergence",
-        "sr_letter",
-        "zone_position",
         "price_vs_vwap",
         "bar_close_time",
     }
@@ -368,12 +351,6 @@ async def scenario_retention(cfg: AppConfig) -> None:
                     bar_close_time=t,
                     m_trend="UP",
                     last_event="NONE",
-                    local_supertrend="BULL",
-                    consolidated_trend="BULL",
-                    long_score=1,
-                    short_score=0,
-                    long_grade="C",
-                    short_grade="C",
                     computed_at=t,
                 )
             )

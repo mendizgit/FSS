@@ -1,8 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiGet } from "@/lib/api-client";
+import { apiGet, apiPost } from "@/lib/api-client";
 import type {
   ClassificationResponse,
   DiscoveryResponse,
@@ -67,5 +67,14 @@ export function useSignals() {
   return useQuery({
     queryKey: ["signals"],
     queryFn: ({ signal }) => apiGet<SignalsResponse>("/signals/latest", signal),
+  });
+}
+
+export function useSetFlag() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, enabled }: { key: "news" | "telegram"; enabled: boolean }) =>
+      apiPost<{ flags: { news: boolean; telegram: boolean } }>(`/flags/${key}`, { enabled }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["status"] }),
   });
 }

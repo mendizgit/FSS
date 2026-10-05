@@ -1,4 +1,4 @@
-"""F3 steps 2-5: Movers Pool (top 50) and Momentum Selection (top 20) - Arch §5.3-5.4."""
+"""F3 steps 2-5: Movers Pool (top 80) and Momentum Selection (top 30) - Arch §5.3-5.4."""
 
 from __future__ import annotations
 

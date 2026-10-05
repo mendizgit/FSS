@@ -11,7 +11,7 @@ from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tss.db.models import AgentRun, NewsItem, SystemState
+from tss.db.models import AgentRun, ControlFlag, NewsItem, SystemState
 
 CHANNEL = "tss_events"
 
@@ -128,3 +128,17 @@ async def purge_ops(session: AsyncSession, cutoff: datetime) -> dict[str, int]:
         "agent_runs": int(getattr(runs, "rowcount", 0) or 0),
         "news_items": int(getattr(news, "rowcount", 0) or 0),
     }
+
+
+async def get_flags(session: AsyncSession) -> dict[str, bool]:
+    rows = (await session.execute(select(ControlFlag))).scalars().all()
+    return {r.key: r.enabled for r in rows}
+
+
+async def set_flag(session: AsyncSession, key: str, enabled: bool, now: datetime) -> None:
+    stmt = insert(ControlFlag).values(key=key, enabled=enabled, updated_at=now)
+    await session.execute(
+        stmt.on_conflict_do_update(
+            index_elements=["key"], set_={"enabled": enabled, "updated_at": now}
+        )
+    )

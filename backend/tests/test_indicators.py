@@ -15,7 +15,6 @@ from tss.indicators.fgi_v3 import (
     align,
     compute,
     event_at,
-    grade,
     recent_events,
     snapshot,
 )
@@ -201,7 +200,7 @@ def test_buy_sell_only_fire_on_flips_and_buy_needs_the_rsi_gate() -> None:
     assert sum(s.buy) <= sum(s.bull_t)
 
 
-def test_event_priority_against_htf_and_grade() -> None:
+def test_event_priority_and_against_htf() -> None:
     bars = _bars(900, seed=11)
     s = compute(bars, _htf(len(bars)))
     i = next(i for i in range(len(bars)) if s.buy[i])
@@ -212,8 +211,6 @@ def test_event_priority_against_htf_and_grade() -> None:
     s.htf_dir[i] = 0
     assert against_htf(s, i, "BUY") is True  # unknown HTF is not "with" the trend
     assert against_htf(s, i, "TD_BULL") is None
-    p = FgiParams()
-    assert (grade(6, p), grade(5, p), grade(4, p), grade(3, p)) == ("A", "A", "B", "C")
 
 
 def test_snapshot_values_are_consistent() -> None:
@@ -224,10 +221,6 @@ def test_snapshot_values_are_consistent() -> None:
     assert snap.m_trend in ("UP", "DOWN")
     assert snap.last_event in ("BUY", "SELL", "BULL_T", "BEAR_T", "TD_BULL", "TD_BEAR", "NONE")
     assert (snap.last_event == "NONE") == (snap.bars_ago is None)
-    assert snap.consolidated_trend in ("BULL", "BEAR", "UNCONFIRMED")
-    assert 0 <= snap.long_score <= 6 and 0 <= snap.short_score <= 6
-    assert snap.long_grade == grade(snap.long_score, FgiParams())
-    assert snap.htf_supertrend == "BULL"
     assert snap.price_vs_vwap in ("ABOVE", "BELOW")
     events = recent_events(bars, s, timedelta(minutes=5), 700)
     if events:

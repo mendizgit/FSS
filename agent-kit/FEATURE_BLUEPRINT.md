@@ -125,7 +125,7 @@ Out of scope: order flow, footprint, CVD, order book analysis, any non-MEXC mark
 **Objective:** Every 15 minutes:
 
 - rank the **top 50 movers pool** by RVOL
-- select **up to 20** momentum candidates (|Δp 15m| ≥ 1.5 % and RVOL ≥ 1.5×)
+- select **up to 30** momentum candidates (|Δp 15m| ≥ 0.8 % and RVOL ≥ 1.2×; v1.3.3)
 - always include BTC and ETH as pinned context
 
 **Flow:** Runs in one `cycle_id`:

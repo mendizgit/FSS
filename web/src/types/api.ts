@@ -33,6 +33,7 @@ export interface StatusResponse {
   db_size_bytes: number;
   telegram_configured: boolean;
   telegram_paused: boolean;
+  flags: { news: boolean; telegram: boolean };
   now: string;
 }
 
@@ -151,16 +152,6 @@ export interface SignalRow {
   last_event: string;
   bars_ago: number | null;
   against_htf: boolean | null;
-  htf_supertrend: string | null;
-  local_supertrend: string;
-  consolidated_trend: string;
-  long_score: number;
-  short_score: number;
-  long_grade: string;
-  short_grade: string;
-  rsi_divergence: string | null;
-  sr_letter: string | null;
-  zone_position: string | null;
   price_vs_vwap: string | null;
   computed_at: string;
 }

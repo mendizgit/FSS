@@ -1,4 +1,4 @@
-"""Movers pool (top 50) and momentum selection (top 20) - Arch §5.3-5.4. Pure functions."""
+"""Movers pool (top 80) and momentum selection (top 30) - Arch §5.3-5.4. Pure functions."""
 
 from __future__ import annotations
 

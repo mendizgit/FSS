@@ -1,5 +1,15 @@
 # Agent Kit Changelog
 
+## v1.3.3 — 2026-10-05 (user-approved signal coverage change)
+- Persistent switches: table `control_flags` (migration 7a1d3c9e5b20), `POST /api/flags/{news|telegram}` {enabled}, `/api/status.flags`. News off = news job skipped (no fetch). Telegram needs credentials; a dashboard choice overrides `TELEGRAM_ALERTS` in .env, with no choice the .env value decides. Header buttons "News feed: on/off" and "Telegram: on/off". First write endpoint (behind the same Caddy login).
+- Signals cleanup (user request): removed htf_supertrend, local_supertrend, consolidated_trend, long/short score+grade, rsi_divergence, sr_letter, zone_position from the GUI, `/api/signals/latest`, the `signals` table (migration b3e8f01c6d44 drops the columns) and `SignalSnapshot`. Kept: m_trend, last_event, bars_ago, against_htf (event flag, alerts), price_vs_vwap. Indicator series math is unchanged (events/parity unaffected); the unused `zone_position` helper stays in indicators/zones.py.
+- GUI: header toggle "News" hides/shows the News panel on md+ (remembered in localStorage); with News hidden the Classification/Signals-Movers columns widen (xl: 50 / 50).
+- Momentum thresholds: `pool_size` 50→80, `min_rvol` 1.5→1.2, `min_abs_price_change_15m_pct` 1.5→0.8 (`top_n` 20→30). Arch §5.3 text/§13 updated.
+- Signal engine symbols = momentum-selected + `signals.majors` only; pinned symbols no longer add signals (still ticked, classified, ranked).
+- New config `quiet_hours` (pause 00:00 IST, resume 06:00 IST): snapshot/movers/pipeline/signal/news (and so notifier) do not run in the window; only retention keeps its schedule (universe pauses too and refreshes once at 06:00 IST via cron `universe_resume`); API/WS/ticks stay up; /api/status reports state PAUSED. After resume 1h/4h classification windows need history again (1h/4h) and show UNKNOWN until then.
+- Auto-start after reboot: docker is enabled in systemd and every service has `restart: unless-stopped`.
+- Signal job runs right after each 15-min pipeline (:00/:15/:30/:45); the 5-min cron (+20 s, matching the 5-min snapshot window) covers the other boundaries.
+
 ## v1.3.2 — 2026-10-05 (user-requested dashboard change)
 - New config `signals.majors` (BTC, ETH, SOL, XRP): their signals are always computed and shown on a new "Majors" tab of the Signals panel; the "Momentum" tab shows the selected symbols. `/api/signals/latest` rows carry `group`.
 - Live ticker now subscribes to every price shown (selected, pinned, majors, movers, pool) and re-subscribes on `movers_updated`; movers / pool day-change is recomputed live from the tick and the day open.

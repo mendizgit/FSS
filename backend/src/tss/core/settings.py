@@ -120,6 +120,13 @@ class ControlCfg(_Strict):
     breaker_cooldown_s: int = Field(gt=0)
 
 
+class QuietHoursCfg(_Strict):
+    """Daily window (IST wall clock) in which the data/signal jobs do not run."""
+
+    pause_hour_ist: int = Field(ge=0, le=23)
+    resume_hour_ist: int = Field(ge=0, le=23)
+
+
 class MexcCfg(_Strict):
     max_requests_per_second: float = Field(gt=0)
 
@@ -133,6 +140,7 @@ class Thresholds(_Strict):
     movers: MoversCfg
     classification: ClassificationCfg
     control: ControlCfg
+    quiet_hours: QuietHoursCfg
     mexc: MexcCfg
 
 

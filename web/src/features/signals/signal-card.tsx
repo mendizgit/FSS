@@ -9,7 +9,7 @@ import { TimeText } from "@/components/tss/time-text";
 import { cn } from "@/lib/utils";
 import type { SignalRow, SignalSymbol } from "@/types/api";
 
-import { DIVERGENCE_LABEL, EVENT_META, TF_MINUTES, ZONE_LABEL } from "./meta";
+import { EVENT_META, TF_MINUTES } from "./meta";
 
 const TONE = { up: "text-up", down: "text-down", muted: "text-muted-foreground" } as const;
 
@@ -50,24 +50,9 @@ function EventCell({ row }: { row: SignalRow }) {
   );
 }
 
-function Grades({ row }: { row: SignalRow }) {
-  const cls = (grade: string, tone: "up" | "down") =>
-    grade === "A" ? (tone === "up" ? "text-up" : "text-down") : grade === "B" ? "text-warn" : "text-muted-foreground";
-  return (
-    <Tip content={`Confluence score of 6 factors. Long ${row.long_score}/6 (${row.long_grade}), short ${row.short_score}/6 (${row.short_grade}). A ≥ 5, B ≥ 4.`} focusable>
-      <span className="num inline-flex gap-2 whitespace-nowrap">
-        <span className={cls(row.long_grade, "up")}>L {row.long_grade}<span className="text-[10px] text-muted-foreground"> {row.long_score}</span></span>
-        <span className={cls(row.short_grade, "down")}>S {row.short_grade}<span className="text-[10px] text-muted-foreground"> {row.short_score}</span></span>
-      </span>
-    </Tip>
-  );
-}
-
 function Row({ row, now }: { row: SignalRow; now: number }) {
   const ageMin = (now - new Date(row.computed_at).getTime()) / 60000;
   const stale = ageMin > 3 * Math.max(TF_MINUTES[row.timeframe] ?? 5, 5) + 5;
-  const zone = row.zone_position ? ZONE_LABEL[row.zone_position] : null;
-  const div = row.rsi_divergence ? DIVERGENCE_LABEL[row.rsi_divergence] : null;
   return (
     <tr className={cn("h-9 border-t border-border/60", stale && "opacity-60")}>
       <th scope="row" className="num px-2 text-left font-medium">
@@ -77,50 +62,6 @@ function Row({ row, now }: { row: SignalRow; now: number }) {
       </th>
       <td className="px-2"><Direction value={row.m_trend} labelUp="Up" labelDown="Down" /></td>
       <td className="px-2"><EventCell row={row} /></td>
-      <td className="px-2">
-        <Direction
-          value={row.consolidated_trend === "UNCONFIRMED" ? null : row.consolidated_trend}
-          labelUp="Bull"
-          labelDown="Bear"
-        />
-        {row.consolidated_trend === "UNCONFIRMED" ? <span className="text-muted-foreground">unconfirmed</span> : null}
-      </td>
-      <td className="px-2">
-        <Tip content="4H SuperTrend (left) and local SuperTrend (right)" focusable>
-          <span className="inline-flex gap-2 whitespace-nowrap">
-            <Direction value={row.htf_supertrend} labelUp="4H" labelDown="4H" />
-            <Direction value={row.local_supertrend} labelUp="loc" labelDown="loc" />
-          </span>
-        </Tip>
-      </td>
-      <td className="px-2"><Grades row={row} /></td>
-      <td className="px-2">
-        {div ? (
-          <Tip content={div.meaning} focusable>
-            <span className={cn("whitespace-nowrap", TONE[div.tone])}>{div.text}</span>
-          </Tip>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </td>
-      <td className="px-2">
-        {row.sr_letter ? (
-          <Tip content={row.sr_letter === "r" ? "Resistance letter: price rejected at the upper band." : "Support letter: price rejected at the lower band."} focusable>
-            <span className={cn("num font-semibold", row.sr_letter === "r" ? "text-down" : "text-up")}>{row.sr_letter}</span>
-          </Tip>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </td>
-      <td className="px-2">
-        {zone ? (
-          <Tip content={zone.meaning} focusable>
-            <span className={cn("whitespace-nowrap", TONE[zone.tone])}>{zone.text}</span>
-          </Tip>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </td>
       <td className="px-2">
         {row.price_vs_vwap ? (
           <span className={cn("inline-flex items-center gap-0.5", row.price_vs_vwap === "ABOVE" ? "text-up" : "text-down")}>
@@ -144,12 +85,11 @@ export function SignalCard({ item, now }: { item: SignalSymbol; now: number }) {
         <LivePrice symbol={item.symbol} fallback={null} className="text-xs text-muted-foreground" />
       </header>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse text-[12px]">
+        <table className="w-full min-w-[360px] border-collapse text-[12px]">
           <thead className="sr-only">
             <tr>
               <th scope="col">Timeframe</th><th scope="col">M trend</th><th scope="col">Last event</th>
-              <th scope="col">Consolidated trend</th><th scope="col">SuperTrends</th><th scope="col">Grades</th>
-              <th scope="col">Divergence</th><th scope="col">s/r</th><th scope="col">Zone</th><th scope="col">VWAP</th>
+              <th scope="col">VWAP</th>
             </tr>
           </thead>
           <tbody>

@@ -28,6 +28,7 @@ from tss.agents.notifier import NotifierAgent
 from tss.clients.telegram import TelegramClient
 from tss.core.settings import AppConfig, load_config_or_exit
 from tss.db.models import MarketSnapshot, SignalEvent
+from tss.db.repositories import ops as ops_repo
 
 check = sf.check
 TOKEN = "999:SECRET-SIM-TOKEN"
@@ -389,8 +390,32 @@ async def scenario_cap_and_config(cfg: AppConfig) -> None:
     await c2.signal_job()
     check("Telegram disabled: the notifier is not run after signals", len(tg2.delivered) == 0)
     c2.telegram_enabled = True
+    # credentials present, TELEGRAM_ALERTS unset -> on; the dashboard flag overrides it
+    c2.deps.config = AppConfig(
+        settings=cfg.settings.model_copy(
+            update={
+                "telegram_bot_token": SecretStr("1:x"),
+                "telegram_chat_id": "42",
+                "telegram_alerts": "on",
+            }
+        ),
+        thresholds=cfg.thresholds,
+        denylist=cfg.denylist,
+        news_sources=cfg.news_sources,
+    )
+    async with c2.deps.session_factory() as ses:
+        await ops_repo.set_flag(ses, "telegram", False, datetime.now(UTC))
+        await ses.commit()
+    await c2.signal_job()
+    check("dashboard flag off: the notifier is not run", len(tg2.delivered) == 0)
+    async with c2.deps.session_factory() as ses:
+        await ops_repo.set_flag(ses, "telegram", True, datetime.now(UTC))
+        await ses.commit()
     await c2.signal_job()
     check("Telegram enabled: the notifier runs right after the signal run", len(tg2.delivered) == 1)
+    async with c2.deps.session_factory() as ses:
+        await ses.execute(text("DELETE FROM control_flags"))
+        await ses.commit()
 
     off_settings = cfg.settings.model_copy(
         update={"telegram_bot_token": None, "telegram_chat_id": None}

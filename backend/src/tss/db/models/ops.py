@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, CheckConstraint, Index, Integer, String, Text, text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -52,4 +52,14 @@ class SystemState(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     state: Mapped[str] = mapped_column(String(16))
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class ControlFlag(Base):
+    """Persistent on/off switches set from the dashboard (control/flags.py). No row = default."""
+
+    __tablename__ = "control_flags"
+
+    key: Mapped[str] = mapped_column(String(32), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)

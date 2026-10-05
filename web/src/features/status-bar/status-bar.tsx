@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { AlertOctagon, AlertTriangle, CheckCircle2, Hourglass, Radio, WifiOff } from "lucide-react";
 
 import { ThemeToggle } from "@/components/layout/theme-toggle";
@@ -30,6 +31,7 @@ function SystemState({ status, error }: { status: StatusResponse | undefined; er
     RUNNING: { icon: CheckCircle2, text: "Running", tone: "border-up/50 text-up bg-up-bg" },
     WARMING_UP: { icon: Hourglass, text: "Warming up", tone: "border-warn/50 text-warn bg-warn-bg" },
     DEGRADED: { icon: AlertTriangle, text: "Degraded", tone: "border-warn/50 text-warn bg-warn-bg" },
+    PAUSED: { icon: Hourglass, text: "Paused (quiet hours)", tone: "border-border text-muted-foreground" },
     HALTED: { icon: AlertOctagon, text: "Halted", tone: "border-crit/60 text-crit bg-crit-bg" },
     UNKNOWN: { icon: AlertTriangle, text: "No worker data", tone: "border-warn/50 text-warn bg-warn-bg" },
     UNREACHABLE: { icon: WifiOff, text: "API unreachable", tone: "border-crit/60 text-crit bg-crit-bg" },
@@ -101,9 +103,8 @@ function RunDetails({ spec, status, run }: { spec: ChipSpec; status: StatusRespo
       {spec.note ? <p className="text-muted-foreground">{spec.note}</p> : null}
       {spec.needsTelegram && status.telegram_paused ? (
         <p className="rounded border border-border bg-muted p-2 text-muted-foreground">
-          Paused. Alerts are switched off with <span className="num">TELEGRAM_ALERTS=off</span> in{" "}
-          <span className="num">.env</span>. Set it to <span className="num">on</span> and restart the
-          worker to resume.
+          Paused. Use the Telegram button in the header to resume (it overrides{" "}
+          <span className="num">TELEGRAM_ALERTS</span> in <span className="num">.env</span>).
         </p>
       ) : spec.needsTelegram && !status.telegram_configured ? (
         <p className="rounded border border-border bg-muted p-2 text-muted-foreground">
@@ -206,7 +207,7 @@ function AgentChip({ spec, status }: { spec: ChipSpec; status: StatusResponse | 
   );
 }
 
-export function StatusBar() {
+export function StatusBar({ actions }: { actions?: ReactNode }) {
   const query = useStatus();
   const status = query.data;
   return (
@@ -230,6 +231,7 @@ export function StatusBar() {
         ) : null}
         <div className="ml-auto flex items-center gap-3">
           <WsIndicator />
+          {actions}
           <ThemeToggle />
         </div>
       </div>

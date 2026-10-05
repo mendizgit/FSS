@@ -30,7 +30,9 @@ from tss.agents.universe import UniverseAgent
 from tss.clients.rss import RssClient
 from tss.clients.telegram import TelegramClient
 from tss.control.breaker import CircuitBreaker
+from tss.control.flags import news_on, telegram_on
 from tss.control.health import HealthInputs, evaluate
+from tss.control.schedule import in_quiet_hours
 from tss.core.errors import StorageError
 from tss.core.logging import get_logger
 from tss.core.time import utc_now
@@ -41,6 +43,8 @@ COMPONENT = "control"
 PHASE = "P1"
 FUTURES_AGENTS = frozenset({"universe", "snapshot", "kline_sync"})
 FUTURES_SOURCE = "mexc_futures"
+# retention keeps its own schedule
+PAUSABLE_JOBS = frozenset({"universe", "snapshot", "movers", "pipeline", "signal", "news"})
 
 
 class Controller:
@@ -79,6 +83,10 @@ class Controller:
         self.degraded: set[str] = set()
         self._busy: set[str] = set()
         self.log = get_logger(COMPONENT)
+
+    def quiet_now(self) -> bool:
+        q = self.deps.config.thresholds.quiet_hours
+        return in_quiet_hours(self.clock(), q.pause_hour_ist, q.resume_hour_ist)
 
     # --- failure policy ------------------------------------------------------------------
 
@@ -177,6 +185,8 @@ class Controller:
 
     async def _exclusive(self, job: str, coro_fn: Callable[[], object]) -> None:
         """max_instances=1: a job that is already running is skipped, never doubled."""
+        if job in PAUSABLE_JOBS and self.quiet_now():
+            return  # daily quiet hours: nothing runs, nothing is logged per tick
         if job in self._busy:
             self.log.warning("job still running; skipped", component=COMPONENT, phase=PHASE, op=job)
             return
@@ -243,6 +253,8 @@ class Controller:
             await self._record_pipeline(cycle, now, statuses, elapsed, overrun, complete)
 
         await self._exclusive("pipeline", go)
+        # the new selection is saved: compute signals now instead of waiting for the next cron
+        await self.signal_job()
 
     async def _record_pipeline(
         self,
@@ -283,8 +295,10 @@ class Controller:
     async def signal_job(self) -> None:
         async def go() -> None:
             outcome = await self.run_agent(self.agents["signal"], uuid.uuid4(), self.clock())
+            s = self.deps.config.settings
             if (
                 self.telegram_enabled
+                and telegram_on(await self._flags(), s.telegram_configured, s.telegram_paused)
                 and outcome is not None
                 and outcome.status in (SUCCESS, PARTIAL)
             ):
@@ -293,8 +307,19 @@ class Controller:
 
         await self._exclusive("signal", go)
 
+    async def _flags(self) -> dict[str, bool]:
+        try:
+            async with self.deps.session_factory() as session:
+                return await ops.get_flags(session)
+        except Exception as exc:
+            if is_db_unreachable(exc):
+                self.halt("database unreachable (control/flags)")
+            return {}
+
     async def news_job(self) -> None:
         async def go() -> None:
+            if not news_on(await self._flags()):
+                return  # stopped from the dashboard
             await self.run_agent(self.agents["news"], uuid.uuid4(), self.clock())
 
         await self._exclusive("news", go)

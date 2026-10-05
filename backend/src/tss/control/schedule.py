@@ -4,7 +4,17 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from tss.core.time import next_boundary, utc_day_start
+from tss.core.time import next_boundary, to_ist, utc_day_start
+
+
+def in_quiet_hours(now: datetime, pause_hour: int, resume_hour: int) -> bool:
+    """True while the IST wall clock is in [pause_hour:00, resume_hour:00) (wraps midnight)."""
+    hour = to_ist(now).hour
+    if pause_hour == resume_hour:
+        return False
+    if pause_hour < resume_hour:
+        return pause_hour <= hour < resume_hour
+    return hour >= pause_hour or hour < resume_hour
 
 
 def next_snapshot(now: datetime) -> datetime:
@@ -18,8 +28,9 @@ def next_pipeline(now: datetime) -> datetime:
 
 
 def next_signal(now: datetime) -> datetime:
-    """5-minute boundary + 30 s."""
-    return next_boundary(now - timedelta(seconds=30), 5) + timedelta(seconds=30)
+    """5-minute boundary + 20 s. On 15-minute boundaries the pipeline (same +20 s) triggers the
+    signal run when it finishes, so that is the earliest start there too."""
+    return next_boundary(now - timedelta(seconds=20), 5) + timedelta(seconds=20)
 
 
 def next_news(now: datetime) -> datetime:

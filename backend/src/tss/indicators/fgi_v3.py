@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from tss.indicators.divergence import DivergenceEngine, DivParams, single_pivot_divergence
+from tss.indicators.divergence import DivParams, single_pivot_divergence
 from tss.indicators.primitives import (
     NAN,
     Series,
@@ -31,7 +31,7 @@ from tss.indicators.primitives import (
 )
 from tss.indicators.range_filter import RangeFilterParams, range_filter
 from tss.indicators.supertrend import supertrend
-from tss.indicators.zones import ZoneParams, zone_position, zones
+from tss.indicators.zones import ZoneParams, zones
 
 EVENTS = ("BUY", "SELL", "BULL_T", "BEAR_T", "TD_BULL", "TD_BEAR")  # priority within one bar
 
@@ -353,11 +353,11 @@ def compute(bars: Bars, htf: HtfContext, params: FgiParams | None = None) -> Fgi
         td_bear=td_bear,
         r_letter=r_letter,
         s_letter=s_letter,
-        long_score=long_score,
-        short_score=short_score,
         zone_c=zc,
         zone_b=zb,
         vwap=vwap,
+        long_score=long_score,
+        short_score=short_score,
     )
 
 
@@ -387,10 +387,6 @@ def against_htf(s: FgiSeries, i: int, event: str) -> bool | None:
     return None
 
 
-def grade(score: int, p: FgiParams) -> str:
-    return "A" if score >= p.grade_a else "B" if score >= p.grade_b else "C"
-
-
 @dataclass(frozen=True)
 class SignalSnapshot:
     bar_close_time: datetime
@@ -398,16 +394,6 @@ class SignalSnapshot:
     last_event: str
     bars_ago: int | None
     against_htf: bool | None
-    htf_supertrend: str | None
-    local_supertrend: str
-    consolidated_trend: str
-    long_score: int
-    short_score: int
-    long_grade: str
-    short_grade: str
-    rsi_divergence: str | None
-    sr_letter: str | None
-    zone_position: str | None
     price_vs_vwap: str | None
 
 
@@ -415,10 +401,8 @@ def snapshot(
     bars: Bars,
     s: FgiSeries,
     tf_delta: timedelta,
-    params: FgiParams | None = None,
 ) -> SignalSnapshot:
     """Values for the newest (closed) bar."""
-    p = params or FgiParams()
     i = len(bars) - 1
     last_event = "NONE"
     bars_ago: int | None = None
@@ -428,29 +412,14 @@ def snapshot(
         if ev is not None:
             last_event, bars_ago, against = ev, i - j, against_htf(s, j, ev)
             break
-    engine = DivergenceEngine(s.rsi, bars.close, bars.high, bars.low, p.div)
-    divergence = engine.detect(i).label()
     c = bars.close[i]
     vw = s.vwap[i]
-    htf = s.htf_dir[i]
     return SignalSnapshot(
         bar_close_time=bars.open_time[i] + tf_delta,
         m_trend="UP" if s.trend[i] == 1 else "DOWN" if s.trend[i] == -1 else "NONE",
         last_event=last_event,
         bars_ago=bars_ago,
         against_htf=against,
-        htf_supertrend="BULL" if htf < 0 else "BEAR" if htf > 0 else None,
-        local_supertrend="BULL" if s.loc_dir[i] < 0 else "BEAR",
-        consolidated_trend=(
-            "BULL" if s.ct_buy_count[i] > 1 else "BEAR" if s.ct_sell_count[i] > 1 else "UNCONFIRMED"
-        ),
-        long_score=s.long_score[i],
-        short_score=s.short_score[i],
-        long_grade=grade(s.long_score[i], p),
-        short_grade=grade(s.short_score[i], p),
-        rsi_divergence=divergence,
-        sr_letter="r" if s.r_letter[i] else "s" if s.s_letter[i] else None,
-        zone_position=zone_position(c, s.zone_c[i], s.zone_b[i], p.zone),
         price_vs_vwap=None if isnan(vw) else ("ABOVE" if c >= vw else "BELOW"),
     )
 

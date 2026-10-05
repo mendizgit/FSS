@@ -39,7 +39,7 @@ async def main() -> None:
     )
     telegram = (
         TelegramClient(cfg.settings.telegram_bot_token, cfg.settings.telegram_chat_id or "")
-        if cfg.settings.telegram_enabled and cfg.settings.telegram_bot_token
+        if cfg.settings.telegram_configured and cfg.settings.telegram_bot_token
         else None
     )
     controller = Controller(deps, RssClient(http), telegram=telegram)

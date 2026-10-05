@@ -42,6 +42,7 @@ class StatusOut(BaseModel):
     db_size_bytes: int
     telegram_configured: bool
     telegram_paused: bool
+    flags: dict[str, bool]
     now: datetime
 
 
@@ -162,16 +163,6 @@ class SignalRowOut(BaseModel):
     last_event: str
     bars_ago: int | None
     against_htf: bool | None
-    htf_supertrend: str | None
-    local_supertrend: str
-    consolidated_trend: str
-    long_score: int
-    short_score: int
-    long_grade: str
-    short_grade: str
-    rsi_divergence: str | None
-    sr_letter: str | None
-    zone_position: str | None
     price_vs_vwap: str | None
     computed_at: datetime
 

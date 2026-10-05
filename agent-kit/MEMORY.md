@@ -1,9 +1,11 @@
 # MEMORY — TSS progress (single file · edit changed lines only · max 150 lines)
 
-updated: 2026-10-05 | commit: 2d55786 | phase: P5 | status: AWAITING_REVIEW
+updated: 2026-10-05 | commit: fe153a9 | phase: P5 | status: AWAITING_REVIEW
 
 ## Next step
-- Telegram alerts are PAUSED (TELEGRAM_ALERTS=off in .env; set `on` + `docker compose up -d worker api` to resume). Uncommitted: new alert format + pause switch (commit on user "commit"). Waiting for user decision on alert latency options (see Blockers). Open: TV parity exports (F9), coin-name news tagging, CryptoPanic, zero_fee cadence, Float vs numeric, preflight wording.
+- Stack rebuilt with quiet hours + selection changes; Telegram stays paused during observation.
+- Restart worker+api to apply latency/selection change (`docker compose up -d --build worker api`), then observe. Open: Q3 (alerts BUY/SELL only?), top_n 20 may now cap selection.
+- Telegram alerts are PAUSED (TELEGRAM_ALERTS=off in .env; set `on` + `docker compose up -d worker api` to resume). Waiting for user decision on alert latency options (see Blockers). Open: TV parity exports (F9), coin-name news tagging, CryptoPanic, zero_fee cadence, Float vs numeric, preflight wording.
 
 ## Features (TODO / WIP / DONE / BLOCKED)
 F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 DONE(news/signals = module-off placeholders) · F8 DONE · F9 BUILT(parity UNPROVEN) · F10 DONE(live) · F11 DONE · F12 DONE(data)
@@ -12,6 +14,11 @@ F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 
 - ALERT LATENCY (decide): SKY_USDT bullT on the 15m bar closed 17:00 IST was alerted at 17:20 IST. Cause: alerts/signals only cover momentum-selected + pinned + majors symbols; SKY was first selected by the 17:15 cycle, and the 17:15:30 signal run started before the cycle persisted its selection, so SKY was first computed at 17:20:30 (event found in last-3-bars lookback, within 30 min freshness window). Pipeline itself is not slow (tracked symbols alert within ~30 s of bar close). Options: (1) run signal job right after each 15-min pipeline (saves ~4 min, safe); (2) track all ~155 liquid symbols on 15m+1h and alert BUY/SELL only (~2 alerts/h est.; +~150 kline req per 15 min, +~150 MB RAM; bullT/bearT everywhere ~30/h = too noisy); (3) add `Bar closed : HH:MM IST` line back to alerts; (4) drop alerts older than ~1 bar + 2 min. Recommended: 1 + 3, optionally 2. User has not chosen yet.
 
 ## Log (newest first · max 10 lines · delete oldest)
+- 2026-10-06 signals cleanup: dropped 10 derived columns (migration b3e8f01c6d44) + API/GUI/SignalSnapshot; kept m_trend/last_event/bars_ago/against_htf/price_vs_vwap; sim_config disables quiet hours so sims are clock-independent; pytest 75, all sims pass
+- 2026-10-06 persistent flags: control_flags table + migration 7a1d3c9e5b20, control/flags.py, api/routes/flags.py (POST /api/flags/{news|telegram}), status.flags, header buttons; worker builds Telegram client whenever creds exist, notifier gated per run by flag (flag overrides TELEGRAM_ALERTS env; no row = env); pytest 75, sims pass (telegram 30)
+- 2026-10-05 user: universe also pauses in quiet hours (cron universe_resume 06:00 IST); top_n 20->30; News panel toggle in status bar (localStorage tss-news-open), wider Signals column when hidden
+- 2026-10-05 quiet_hours config (pause 0 / resume 6 IST) gates snapshot/movers/pipeline/signal/news in Controller._exclusive (control/pipeline.py, schedule.in_quiet_hours); status route reports PAUSED; web chip; tests/test_schedule_quiet.py; pytest 72, sims pass (run outside window)
+- 2026-10-05 user-approved: pool 80 / RVOL>=1.2 / |d15m|>=0.8% (top_n 20), signals exclude pinned (majors kept), signal job runs after each pipeline (cron every 5 min at +20 s, skips :00/:15/:30/:45); ruff/mypy/pytest 70, sims pass (signals 25, failures 47, ticker 17, telegram 29); NOT yet restarted in Docker/committed
 - 2026-10-05 alert format changed (user spec: bold BASEUSDT.P / Time / Signal dot / Trend); investigated 20-min late SKY alert (see Blockers); Telegram alerts paused via TELEGRAM_ALERTS=off (settings.telegram_paused/enabled, compose passes it, status.telegram_paused, chip shows Paused); verified 0 notifier runs and no Telegram contact; simulate_telegram 29/29, pytest 70
 - 2026-10-05 user change: Signals panel Momentum/Majors tabs (config signals.majors = BTC,ETH,SOL,XRP), live ticks for all visible prices + live day-change, tick-age cue; fixed docker-compose not passing TELEGRAM_* to containers (Telegram now live: first 3 alerts delivered); user confirmed bot test message; all sims pass
 - 2026-10-05 P5 built: clients/telegram.py (token never logged), domain/notifier.py, agents/notifier.py (claim-then-send, release on failure, SKIP LOCKED), runs after each signal run when TELEGRAM_* set; chip + status flag; scripts/telegram_setup.py; simulate_telegram 26/26, pytest 69, other sims pass; found+fixed timestamptz param bug in claim SQL; real Telegram NOT tested (no token)

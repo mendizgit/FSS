@@ -33,7 +33,7 @@ from tss.clients.models import ContractDetail, FuturesTicker, Kline, SpotKline, 
 from tss.clients.rss import RssClient
 from tss.control.pipeline import Controller
 from tss.core.errors import DataSourceError
-from tss.core.settings import AppConfig, load_config_or_exit
+from tss.core.settings import AppConfig, QuietHoursCfg, load_config_or_exit
 from tss.db.models import AgentRun
 from tss.db.repositories import ops
 from tss.db.session import create_engine, create_session_factory
@@ -164,9 +164,13 @@ async def drop_sim_db(base_url: str) -> None:
 
 def sim_config(cfg: AppConfig, sim_url: str) -> AppConfig:
     settings = cfg.settings.model_copy(update={"database_url": SecretStr(sim_url)})
+    # scenarios must not depend on the wall clock: switch the daily quiet hours off
+    thresholds = cfg.thresholds.model_copy(
+        update={"quiet_hours": QuietHoursCfg(pause_hour_ist=0, resume_hour_ist=0)}
+    )
     return AppConfig(
         settings=settings,
-        thresholds=cfg.thresholds,
+        thresholds=thresholds,
         denylist=cfg.denylist,
         news_sources=cfg.news_sources,
     )
@@ -696,7 +700,7 @@ async def reset_sim_data(scfg: AppConfig) -> None:
                 text(
                     "TRUNCATE agent_runs, system_state, market_snapshots, "
                     "klines_15m, daily_opens, momentum_rankings, classifications, "
-                    "market_movers, news_items, signals, signal_events, contracts"
+                    "market_movers, news_items, signals, signal_events, contracts, control_flags"
                 )
             )
     finally:

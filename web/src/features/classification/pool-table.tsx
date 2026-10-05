@@ -37,7 +37,7 @@ export function PoolTable({ rows }: { rows: DiscoveryRow[] }) {
           <SortHead label="15m" sortKey="change15m" sort={sort} onSort={toggle} />
           <SortHead label="RVOL" sortKey="rvol" sort={sort} onSort={toggle} title="Last 15m turnover / median of the previous 96 bars" />
           <PlainHead align="left">Gate 2</PlainHead>
-          <SortHead label="Sel #" sortKey="selection" sort={sort} onSort={toggle} title="Rank among the selected (max 20)" />
+          <SortHead label="Sel #" sortKey="selection" sort={sort} onSort={toggle} title="Rank among the selected (max 30)" />
           <SortHead label="UTC day" sortKey="dayChange" sort={sort} onSort={toggle} title="Change since 00:00 UTC" />
           <SortHead label="24h turnover" sortKey="turnover" sort={sort} onSort={toggle} />
           <PlainHead>OI</PlainHead>

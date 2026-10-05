@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tss.api.deps import get_config, get_session
 from tss.api.schemas.models import AgentRunOut, StatusOut, UniverseSummaryOut
+from tss.control.flags import news_on, telegram_on
 from tss.control.schedule import (
+    in_quiet_hours,
     next_news,
     next_pipeline,
     next_retention,
@@ -40,9 +42,17 @@ async def status(session: Session, cfg: Config) -> StatusOut:
         ),
         None,
     )
+    flags = await ops.get_flags(session)
+    tg_on = telegram_on(flags, cfg.settings.telegram_configured, cfg.settings.telegram_paused)
+    q = cfg.thresholds.quiet_hours
+    paused = in_quiet_hours(now, q.pause_hour_ist, q.resume_hour_ist)
     return StatusOut(
-        state=state.state if state else "UNKNOWN",
-        reason=state.reason if state else "worker has not reported yet",
+        state="PAUSED" if paused else (state.state if state else "UNKNOWN"),
+        reason=(
+            f"daily pause {q.pause_hour_ist:02d}:00-{q.resume_hour_ist:02d}:00 IST"
+            if paused
+            else (state.reason if state else "worker has not reported yet")
+        ),
         state_updated_at=state.updated_at if state else None,
         runs=[
             AgentRunOut(
@@ -70,7 +80,8 @@ async def status(session: Session, cfg: Config) -> StatusOut:
         universe=await contracts_repo.universe_counts(session),
         db_size_bytes=await ops.db_size_bytes(session),
         telegram_configured=cfg.settings.telegram_configured,
-        telegram_paused=cfg.settings.telegram_configured and cfg.settings.telegram_paused,
+        telegram_paused=cfg.settings.telegram_configured and not tg_on,
+        flags={"news": news_on(flags), "telegram": tg_on},
         now=now,
     )
 

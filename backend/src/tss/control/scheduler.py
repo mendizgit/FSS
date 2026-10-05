@@ -19,6 +19,18 @@ def build_scheduler(controller: Controller) -> AsyncIOScheduler:
         misfire_grace_time=cfg.universe.refresh_hours * 1800,
         **common,
     )
+    # the interval job above is skipped during quiet hours: refresh once when they end
+    scheduler.add_job(
+        controller.universe_job,
+        "cron",
+        hour=cfg.quiet_hours.resume_hour_ist,
+        minute=0,
+        second=0,
+        timezone="Asia/Kolkata",
+        id="universe_resume",
+        misfire_grace_time=1800,
+        **common,
+    )
     scheduler.add_job(
         controller.snapshot_job,
         "cron",
@@ -40,8 +52,9 @@ def build_scheduler(controller: Controller) -> AsyncIOScheduler:
     scheduler.add_job(
         controller.signal_job,
         "cron",
-        minute="*/5",
-        second=30,
+        # :00/:15/:30/:45 are run by the pipeline right after it saves the new selection
+        minute="5,10,20,25,35,40,50,55",
+        second=20,
         id="signal",
         misfire_grace_time=150,
         **common,
