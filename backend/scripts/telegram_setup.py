@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from datetime import UTC, datetime
 
 from tss.clients.telegram import TelegramClient, TelegramError
 from tss.core.settings import Settings
@@ -59,7 +60,11 @@ async def main() -> int:
             return await discover(client)
         if mode == "sample":
             sample = format_event_message(
-                symbol="UMA_USDT", timeframe="5m", event="BUY", against_htf=False
+                symbol="UMA_USDT",
+                timeframe="5m",
+                event="BUY",
+                against_htf=False,
+                bar_close_time=datetime.now(UTC),
             )
             await client.send_message(sample, html=True)
             print("Sample alert sent (format only, not a real signal).")

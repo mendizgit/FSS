@@ -16,7 +16,7 @@ from typing import Any
 from tss.agents.base import PARTIAL, SKIPPED, SUCCESS, AgentResult, BaseAgent, Deps
 from tss.clients.telegram import TelegramClient, TelegramError, TelegramRateLimited
 from tss.db.repositories import signals as signals_repo
-from tss.domain.notifier import NOTIFY_EVENTS, format_event_message
+from tss.domain.notifier import NOTIFY_EVENTS, NOTIFY_TIMEFRAMES, format_event_message
 
 MIN_INTERVAL_S = 1.1  # Telegram allows about one message per second per chat
 MAX_PER_RUN = 20
@@ -56,7 +56,7 @@ class NotifierAgent(BaseAgent):
             return AgentResult(status=SKIPPED, meta={"reason": "telegram_not_configured"})
         async with self.deps.session_factory() as session:
             claimed = await signals_repo.claim_events(
-                session, now, NOTIFY_EVENTS, self._max_per_run
+                session, now, NOTIFY_EVENTS, self._max_per_run, NOTIFY_TIMEFRAMES
             )
             await session.commit()
         if not claimed:
@@ -67,9 +67,13 @@ class NotifierAgent(BaseAgent):
         sent: list[list[str]] = []
         error: TelegramError | None = None
         try:
-            for index, (symbol, tf, _closed_at, event, against) in enumerate(claimed):
+            for index, (symbol, tf, closed_at, event, against) in enumerate(claimed):
                 text = format_event_message(
-                    symbol=symbol, timeframe=tf, event=event, against_htf=against
+                    symbol=symbol,
+                    timeframe=tf,
+                    event=event,
+                    against_htf=against,
+                    bar_close_time=closed_at,
                 )
                 if index > 0:
                     await self._sleep(self._min_interval)

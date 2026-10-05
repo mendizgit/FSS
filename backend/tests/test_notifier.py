@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -31,6 +32,7 @@ def msg(**kw: object) -> str:
         "timeframe": "5m",
         "event": "BUY",
         "against_htf": False,
+        "bar_close_time": datetime(2026, 10, 6, 9, 5, tzinfo=UTC),  # 14:35 IST
     }
     return format_event_message(**{**base, **kw})  # type: ignore[arg-type]
 
@@ -39,6 +41,7 @@ def test_buy_message_is_exact() -> None:
     assert msg() == (
         "<b>UMAUSDT.P</b>\n"
         "Time : 5 min\n"
+        "Bar close : 14:35 IST\n"
         "Signal : 🟢 Buy\n"
         "Trend : BullT\n"
         "<i>Not financial advice</i>"
@@ -47,9 +50,10 @@ def test_buy_message_is_exact() -> None:
 
 def test_sell_and_trend_only_variants() -> None:
     sell = msg(event="SELL", timeframe="15m", symbol="BTC_USDT")
-    assert sell.splitlines()[:4] == [
+    assert sell.splitlines()[:5] == [
         "<b>BTCUSDT.P</b>",
         "Time : 15 min",
+        "Bar close : 14:35 IST",
         "Signal : 🔴 Sell",
         "Trend : BearT",
     ]
@@ -57,6 +61,9 @@ def test_sell_and_trend_only_variants() -> None:
     assert (
         "Time : 1 hour" in bull_only and "Signal : —" in bull_only and "Trend : BullT" in bull_only
     )
+    td = msg(event="TD_BULL", timeframe="5m")
+    assert "Signal : —" in td and "Trend : TD Bull" in td
+    assert "Trend : TD Bear" in msg(event="TD_BEAR")
     bear_only = msg(event="BEAR_T")
     assert "Signal : —" in bear_only and "Trend : BearT" in bear_only
 

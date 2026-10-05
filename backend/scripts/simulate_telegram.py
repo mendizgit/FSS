@@ -1,6 +1,6 @@
 """F10 acceptance: the Notifier agent against a fake Telegram server (throwaway database).
 
-Covers: exactly-once delivery (incl. two agents racing), only BUY/SELL/bullT/bearT, stale events
+Covers: exactly-once delivery (incl. two agents racing), BUY/SELL/bullT/bearT/TD, stale events
 skipped, message content, release + retry after failures (5xx, network, 401, flood control),
 pacing (>= 1.1 s between messages), per-run cap, "not configured", the Controller hook and that
 no token reaches the database. No network access; the token below is fake.
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import sys
 import uuid
 from collections.abc import Callable
@@ -115,8 +116,9 @@ async def scenario_exactly_once(cfg: AppConfig) -> None:
             event("ETH_USDT", "5m", "SELL", closed, False),
             event("BTC_USDT", "15m", "BULL_T", closed, False),
             event("ETH_USDT", "15m", "BEAR_T", closed, None),
-            event("BTC_USDT", "1h", "TD_BULL", closed, None),
-            event("ETH_USDT", "1h", "TD_BEAR", closed, None),
+            event("SOL_USDT", "5m", "TD_BULL", closed, None),
+            event("XRP_USDT", "15m", "TD_BEAR", closed, None),
+            event("BTC_USDT", "1h", "BUY", closed, False),  # 1h is not pushed
             event(
                 "AAA_USDT", "5m", "BUY", now - timedelta(minutes=40), False
             ),  # stale: 5m window is 15 min
@@ -127,19 +129,20 @@ async def scenario_exactly_once(cfg: AppConfig) -> None:
     out = await agent.execute(uuid.uuid4(), now)
     meta = (out.result.meta if out.result else {}) or {}
     check(
-        "run SUCCESS and sent 4 (BUY, SELL, bullT, bearT only)",
-        out.status == "SUCCESS" and meta["sent"] == 4 and len(tg.delivered) == 4,
+        "run SUCCESS and sent 6 (BUY, SELL, bullT, bearT, TD bull, TD bear)",
+        out.status == "SUCCESS" and meta["sent"] == 6 and len(tg.delivered) == 6,
         str(meta),
     )
     flags = await notified(c)
     check(
-        "TD events and the stale event are not sent and stay unnotified",
-        not flags["BTC_USDT/1h/TD_BULL"]
-        and not flags["ETH_USDT/1h/TD_BEAR"]
+        "stale and 1h events are not sent and stay unnotified; TD events are sent",
+        flags["SOL_USDT/5m/TD_BULL"]
+        and flags["XRP_USDT/15m/TD_BEAR"]
+        and not flags["BTC_USDT/1h/BUY"]
         and not flags["AAA_USDT/5m/BUY"],
     )
     check(
-        "the four delivered events are marked notified once",
+        "the delivered BUY/SELL/bullT/bearT events are marked notified once",
         all(
             flags[k]
             for k in (
@@ -158,15 +161,16 @@ async def scenario_exactly_once(cfg: AppConfig) -> None:
     }
     check(
         "BUY alert: bold BTCUSDT.P, Time : 5 min, green Buy, BullT, against-4H marker, disclaimer",
-        by_event["BUY"].splitlines()[:4]
+        [ln for ln in by_event["BUY"].splitlines() if not ln.startswith("Bar close : ")][:4]
         == ["<b>BTCUSDT.P</b>", "Time : 5 min", "Signal : 🟢 Buy", "Trend : BullT"]
+        and re.search(r"\nBar close : \d\d:\d\d IST\n", by_event["BUY"]) is not None
         and "Against the 4H trend" in by_event["BUY"]
         and "Not financial advice" in by_event["BUY"],
         by_event["BUY"].replace("\n", " | "),
     )
     check(
         "SELL alert: red Sell + BearT; trend-only alerts show Signal : - and the trend",
-        by_event["SELL"].splitlines()[2:4] == ["Signal : 🔴 Sell", "Trend : BearT"]
+        by_event["SELL"].splitlines()[3:5] == ["Signal : 🔴 Sell", "Trend : BearT"]
         and "Signal : —" in by_event["BULL_T"]
         and "Trend : BullT" in by_event["BULL_T"]
         and "Signal : —" in by_event["BEAR_T"]
@@ -185,11 +189,11 @@ async def scenario_exactly_once(cfg: AppConfig) -> None:
     again = await agent.execute(uuid.uuid4(), now + timedelta(seconds=30))
     check(
         "second run sends nothing: each event exactly once",
-        again.result is not None and again.result.rows_out == 0 and len(tg.delivered) == 4,
+        again.result is not None and again.result.rows_out == 0 and len(tg.delivered) == 6,
     )
     check(
         "pacing: >= 1.1 s between consecutive messages",
-        tg.sleeps == [1.1, 1.1, 1.1],
+        tg.sleeps == [1.1] * 5,
         str(tg.sleeps),
     )
 

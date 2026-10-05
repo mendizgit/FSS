@@ -1,6 +1,7 @@
 # Agent Kit Changelog
 
 ## v1.3.3 — 2026-10-05 (user-approved signal coverage change)
+- Telegram now also pushes TD_BULL / TD_BEAR (user request; was BUY/SELL/bullT/bearT only). TD alert: `Signal : —`, `Trend : TD Bull|TD Bear`. Scope = every signal-engine symbol (momentum-selected + majors). Alerts are sent for 5m and 15m only (1h stays dashboard-only) and carry `Bar close : HH:MM IST` (close time of the signal bar).
 - Persistent switches: table `control_flags` (migration 7a1d3c9e5b20), `POST /api/flags/{news|telegram}` {enabled}, `/api/status.flags`. News off = news job skipped (no fetch). Telegram needs credentials; a dashboard choice overrides `TELEGRAM_ALERTS` in .env, with no choice the .env value decides. Header buttons "News feed: on/off" and "Telegram: on/off". First write endpoint (behind the same Caddy login).
 - Signals cleanup (user request): removed htf_supertrend, local_supertrend, consolidated_trend, long/short score+grade, rsi_divergence, sr_letter, zone_position from the GUI, `/api/signals/latest`, the `signals` table (migration b3e8f01c6d44 drops the columns) and `SignalSnapshot`. Kept: m_trend, last_event, bars_ago, against_htf (event flag, alerts), price_vs_vwap. Indicator series math is unchanged (events/parity unaffected); the unused `zone_position` helper stays in indicators/zones.py.
 - GUI: header toggle "News" hides/shows the News panel on md+ (remembered in localStorage); with News hidden the Classification/Signals-Movers columns widen (xl: 50 / 50).

@@ -101,7 +101,11 @@ def _age_case() -> str:
 
 
 async def claim_events(
-    session: AsyncSession, now: datetime, events: Collection[str], limit: int
+    session: AsyncSession,
+    now: datetime,
+    events: Collection[str],
+    limit: int,
+    timeframes: Collection[str],
 ) -> list[tuple[str, str, datetime, str, bool | None]]:
     """Atomically mark up to `limit` unnotified, recent events as notified and return them.
 
@@ -116,6 +120,7 @@ async def claim_events(
         WHERE (symbol, timeframe, bar_close_time, event) IN (
             SELECT symbol, timeframe, bar_close_time, event FROM signal_events
             WHERE notified_at IS NULL AND event = ANY(:events)
+              AND timeframe = ANY(:timeframes)
               AND bar_close_time >= CAST(:now AS timestamptz) - ({_age_case()})
             ORDER BY bar_close_time, symbol, timeframe, event
             LIMIT :limit FOR UPDATE SKIP LOCKED
@@ -123,7 +128,9 @@ async def claim_events(
         RETURNING symbol, timeframe, bar_close_time, event, against_htf
         """
     )
-    result = await session.execute(sql, {"now": now, "events": list(events), "limit": limit})
+    result = await session.execute(
+        sql, {"now": now, "events": list(events), "timeframes": list(timeframes), "limit": limit}
+    )
     rows = [tuple(r) for r in result.all()]
     rows.sort(key=lambda r: (r[2], r[0], r[1], r[3]))
     return rows
