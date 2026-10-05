@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr | None = None  # Phase 5
     telegram_chat_id: str | None = None  # Phase 5
 
+    @property
+    def telegram_enabled(self) -> bool:
+        """Telegram alerts need both values; an empty value in .env counts as unset."""
+        token = (
+            self.telegram_bot_token.get_secret_value().strip() if self.telegram_bot_token else ""
+        )
+        return bool(token and (self.telegram_chat_id or "").strip())
+
 
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)

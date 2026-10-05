@@ -22,11 +22,13 @@ from tss.agents.kline_sync import KlineSyncAgent
 from tss.agents.momentum import MomentumAgent
 from tss.agents.movers import MoversAgent
 from tss.agents.news import NewsAgent
+from tss.agents.notifier import NotifierAgent
 from tss.agents.retention import RetentionAgent
 from tss.agents.signal import SignalAgent
 from tss.agents.snapshot import SnapshotAgent
 from tss.agents.universe import UniverseAgent
 from tss.clients.rss import RssClient
+from tss.clients.telegram import TelegramClient
 from tss.control.breaker import CircuitBreaker
 from tss.control.health import HealthInputs, evaluate
 from tss.core.errors import StorageError
@@ -42,7 +44,13 @@ FUTURES_SOURCE = "mexc_futures"
 
 
 class Controller:
-    def __init__(self, deps: Deps, rss: RssClient, clock: Callable[[], datetime] = utc_now) -> None:
+    def __init__(
+        self,
+        deps: Deps,
+        rss: RssClient,
+        clock: Callable[[], datetime] = utc_now,
+        telegram: TelegramClient | None = None,
+    ) -> None:
         self.deps = deps
         self.clock = clock
         ccfg = deps.config.thresholds.control
@@ -59,12 +67,14 @@ class Controller:
                 RetentionAgent(deps),
                 NewsAgent(deps, rss),
                 SignalAgent(deps),
+                NotifierAgent(deps, telegram),
             )
         }
         self.breakers = {
             name: CircuitBreaker(ccfg.breaker_failures, ccfg.breaker_cooldown_s)
             for name in (*self.agents, FUTURES_SOURCE)
         }
+        self.telegram_enabled = telegram is not None
         self.halt_reason: str | None = None
         self.degraded: set[str] = set()
         self._busy: set[str] = set()
@@ -272,7 +282,14 @@ class Controller:
 
     async def signal_job(self) -> None:
         async def go() -> None:
-            await self.run_agent(self.agents["signal"], uuid.uuid4(), self.clock())
+            outcome = await self.run_agent(self.agents["signal"], uuid.uuid4(), self.clock())
+            if (
+                self.telegram_enabled
+                and outcome is not None
+                and outcome.status in (SUCCESS, PARTIAL)
+            ):
+                # after every signal run (also retries events released by an earlier failure)
+                await self.run_agent(self.agents["notifier"], uuid.uuid4(), self.clock())
 
         await self._exclusive("signal", go)
 

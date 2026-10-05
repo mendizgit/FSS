@@ -84,3 +84,67 @@ async def purge_older_than(session: AsyncSession, cutoff: datetime) -> dict[str,
         "signals": int(getattr(signals, "rowcount", 0) or 0),
         "signal_events": int(getattr(events, "rowcount", 0) or 0),
     }
+
+
+EventKey = tuple[str, str, datetime, str]  # symbol, timeframe, bar_close_time, event
+
+
+def _age_case() -> str:
+    from tss.domain.notifier import DEFAULT_MAX_AGE, MAX_AGE
+
+    whens = " ".join(
+        f"WHEN '{tf}' THEN make_interval(secs => {int(age.total_seconds())})"
+        for tf, age in MAX_AGE.items()
+    )
+    default = f"make_interval(secs => {int(DEFAULT_MAX_AGE.total_seconds())})"
+    return f"CASE timeframe {whens} ELSE {default} END"
+
+
+async def claim_events(
+    session: AsyncSession, now: datetime, events: Collection[str], limit: int
+) -> list[tuple[str, str, datetime, str, bool | None]]:
+    """Atomically mark up to `limit` unnotified, recent events as notified and return them.
+
+    FOR UPDATE SKIP LOCKED makes concurrent claimers take disjoint rows, so an event can only
+    be claimed (and therefore sent) once. Callers must release rows they fail to send.
+    """
+    from sqlalchemy import text
+
+    sql = text(
+        f"""
+        UPDATE signal_events SET notified_at = CAST(:now AS timestamptz)
+        WHERE (symbol, timeframe, bar_close_time, event) IN (
+            SELECT symbol, timeframe, bar_close_time, event FROM signal_events
+            WHERE notified_at IS NULL AND event = ANY(:events)
+              AND bar_close_time >= CAST(:now AS timestamptz) - ({_age_case()})
+            ORDER BY bar_close_time, symbol, timeframe, event
+            LIMIT :limit FOR UPDATE SKIP LOCKED
+        )
+        RETURNING symbol, timeframe, bar_close_time, event, against_htf
+        """
+    )
+    result = await session.execute(sql, {"now": now, "events": list(events), "limit": limit})
+    rows = [tuple(r) for r in result.all()]
+    rows.sort(key=lambda r: (r[2], r[0], r[1], r[3]))
+    return rows
+
+
+async def release_events(session: AsyncSession, keys: Collection[EventKey]) -> int:
+    """Undo a claim for events that were NOT delivered, so they are retried."""
+    from sqlalchemy import tuple_, update
+
+    if not keys:
+        return 0
+    res = await session.execute(
+        update(SignalEvent)
+        .where(
+            tuple_(
+                SignalEvent.symbol,
+                SignalEvent.timeframe,
+                SignalEvent.bar_close_time,
+                SignalEvent.event,
+            ).in_(list(keys))
+        )
+        .values(notified_at=None)
+    )
+    return int(getattr(res, "rowcount", 0) or 0)

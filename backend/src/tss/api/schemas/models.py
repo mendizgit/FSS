@@ -40,6 +40,7 @@ class StatusOut(BaseModel):
     next_runs: dict[str, datetime | None]
     universe: dict[str, int]
     db_size_bytes: int
+    telegram_configured: bool
     now: datetime
 
 

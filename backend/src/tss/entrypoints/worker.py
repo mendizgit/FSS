@@ -13,6 +13,7 @@ from tss.clients.mexc_futures import MexcFuturesClient
 from tss.clients.mexc_spot import HOST as SPOT_HOST
 from tss.clients.mexc_spot import MexcSpotClient
 from tss.clients.rss import RssClient
+from tss.clients.telegram import TelegramClient
 from tss.control.pipeline import Controller
 from tss.control.scheduler import build_scheduler
 from tss.core.logging import configure_logging, get_logger
@@ -36,7 +37,12 @@ async def main() -> None:
         futures=MexcFuturesClient(http),
         spot=MexcSpotClient(http),
     )
-    controller = Controller(deps, RssClient(http))
+    telegram = (
+        TelegramClient(cfg.settings.telegram_bot_token, cfg.settings.telegram_chat_id or "")
+        if cfg.settings.telegram_enabled and cfg.settings.telegram_bot_token
+        else None
+    )
+    controller = Controller(deps, RssClient(http), telegram=telegram)
     scheduler = build_scheduler(controller)
 
     stop = asyncio.Event()
@@ -56,6 +62,8 @@ async def main() -> None:
             await startup
         scheduler.shutdown(wait=False)
         await http.aclose()
+        if telegram is not None:
+            await telegram.aclose()
         await engine.dispose()
 
 

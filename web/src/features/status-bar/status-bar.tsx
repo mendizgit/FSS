@@ -96,7 +96,13 @@ function RunDetails({ spec, status, run }: { spec: ChipSpec; status: StatusRespo
     <div className="flex flex-col gap-2 text-xs">
       <p className="text-sm font-semibold">{spec.label}</p>
       {spec.note ? <p className="text-muted-foreground">{spec.note}</p> : null}
-      {run ? (
+      {spec.needsTelegram && !status.telegram_configured ? (
+        <p className="rounded border border-border bg-muted p-2 text-muted-foreground">
+          Not configured. Set <span className="num">TELEGRAM_BOT_TOKEN</span> and{" "}
+          <span className="num">TELEGRAM_CHAT_ID</span> in <span className="num">.env</span> (see the
+          README, “Telegram alerts”), then restart the worker.
+        </p>
+      ) : run ? (
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
           <dt className="text-muted-foreground">Status</dt>
           <dd className={TONE_TEXT[toneForStatus(run.status)]}>{run.status}</dd>
@@ -134,6 +140,12 @@ function RunDetails({ spec, status, run }: { spec: ChipSpec; status: StatusRespo
         </ul>
       ) : null}
       {spec.id === "news" && run?.meta ? <NewsSources meta={run.meta} /> : null}
+      {spec.id === "telegram" && run?.meta ? (
+        <p className="border-t border-border pt-2 text-muted-foreground">
+          Last run: sent <span className="num text-foreground">{String(run.meta.sent ?? 0)}</span>, retrying{" "}
+          <span className="num text-foreground">{String(run.meta.released ?? 0)}</span>
+        </p>
+      ) : null}
       {run?.error_message ? (
         <p role="alert" className="rounded border border-crit/50 bg-crit-bg p-2 text-crit">
           <span className="num font-semibold">{run.error_component ?? "unknown"}</span>:{" "}
@@ -146,7 +158,8 @@ function RunDetails({ spec, status, run }: { spec: ChipSpec; status: StatusRespo
 
 function AgentChip({ spec, status }: { spec: ChipSpec; status: StatusResponse | undefined }) {
   const run = runFor(status, spec.agent);
-  const tone = spec.agent ? toneForStatus(run?.status) : "muted";
+  const off = spec.agent === null || (spec.needsTelegram === true && status?.telegram_configured === false);
+  const tone = off ? "muted" : toneForStatus(run?.status);
   const duration = run ? durationSeconds(run.started_at, run.finished_at) : null;
   const next = status && spec.nextKey ? status.next_runs[spec.nextKey] : null;
   const pipelineSelected =
@@ -156,22 +169,22 @@ function AgentChip({ spec, status }: { spec: ChipSpec; status: StatusResponse | 
       <PopoverTrigger
         className={cn(
           "inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-card px-2 text-xs whitespace-nowrap hover:bg-muted",
-          !spec.agent && "opacity-70",
+          off && "opacity-70",
         )}
-        aria-label={`${spec.label}: ${run?.status ?? (spec.agent ? "no run yet" : "not enabled")}. Open details`}
+        aria-label={`${spec.label}: ${off ? "not configured" : (run?.status ?? "no run yet")}. Open details`}
       >
         <span aria-hidden className={cn("size-2 rounded-full", TONE_DOT[tone])} />
         <span className="font-medium">{spec.label}</span>
-        <span className={TONE_TEXT[tone]}>{run?.status ?? (spec.agent ? "—" : "off")}</span>
-        {run ? (
+        <span className={TONE_TEXT[tone]}>{off ? "off" : (run?.status ?? "—")}</span>
+        {run && !off ? (
           <span className="num hidden text-muted-foreground lg:inline">
             {duration !== null ? `${duration.toFixed(1)}s` : ""}
             {run.rows_out !== null ? ` · ${run.rows_out}` : ""}
             {pipelineSelected != null ? ` · sel ${pipelineSelected}` : ""}
           </span>
         ) : null}
-        {run ? <TimeText iso={run.started_at} className="num hidden text-muted-foreground xl:inline" /> : null}
-        {next ? (
+        {run && !off ? <TimeText iso={run.started_at} className="num hidden text-muted-foreground xl:inline" /> : null}
+        {next && !off ? (
           <span className="hidden text-muted-foreground 2xl:inline">
             next <TimeText iso={next} />
           </span>

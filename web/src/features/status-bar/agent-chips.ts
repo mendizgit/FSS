@@ -7,6 +7,8 @@ export interface ChipSpec {
   agent: string | null;
   nextKey: string | null;
   note?: string;
+  /** true: shown as 'off' until the matching credentials are configured */
+  needsTelegram?: boolean;
 }
 
 export const CHIPS: ChipSpec[] = [
@@ -21,6 +23,14 @@ export const CHIPS: ChipSpec[] = [
     note: "Kline sync → Pool → Selection → Classification",
   },
   { id: "news", label: "News", agent: "news", nextKey: "news", note: "RSS sources, every 15 min" },
+  {
+    id: "telegram",
+    label: "Telegram",
+    agent: "notifier",
+    nextKey: "signal",
+    note: "BUY / SELL / bullT / bearT alerts",
+    needsTelegram: true,
+  },
   { id: "signals", label: "Signals", agent: "signal", nextKey: "signal", note: "FGI Replica V3, every 5 min" },
 ];
 

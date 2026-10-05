@@ -31,6 +31,7 @@ export interface StatusResponse {
   next_runs: Record<string, string | null>;
   universe: UniverseCounts;
   db_size_bytes: number;
+  telegram_configured: boolean;
   now: string;
 }
 

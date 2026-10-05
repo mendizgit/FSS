@@ -1,17 +1,18 @@
 # MEMORY — TSS progress (single file · edit changed lines only · max 150 lines)
 
-updated: 2026-10-05 | commit: 5e0ff6a | phase: P4 | status: AWAITING_REVIEW
+updated: 2026-10-05 | commit: eaf27c3 | phase: P5 | status: AWAITING_REVIEW
 
 ## Next step
-- P4 built + validated except TradingView PARITY (needs user's TV CSV exports in backend/tests/fixtures/tv/, see README there; then `uv run python scripts/parity_check.py`). Waiting for user review and "commit" (P4 not committed; P3 = 5e0ff6a). P5 (Telegram) only on "start P5". Open decisions: P3 items (coin-name tagging, CryptoPanic, stoplist) + P1 items.
+- P5 built + validated against a fake Telegram server; REAL delivery unproven: user must set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID in .env (README 'Telegram alerts': @BotFather, /start, `scripts/telegram_setup.py discover` then `test`, restart worker). Waiting for user review and "commit" (P5 not committed; P4 = eaf27c3). All phases P0-P5 done; open: TV parity exports (F9), coin-name news tagging, CryptoPanic, zero_fee cadence, Float vs numeric, preflight wording.
 
 ## Features (TODO / WIP / DONE / BLOCKED)
-F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 DONE(news/signals = module-off placeholders) · F8 DONE · F9 BUILT(parity UNPROVEN) · F10 BLOCKED(gated) · F11 DONE · F12 DONE(data)
+F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 DONE(news/signals = module-off placeholders) · F8 DONE · F9 BUILT(parity UNPROVEN) · F10 BUILT(real delivery unproven: needs token/chat id) · F11 DONE · F12 DONE(data)
 
 ## Blockers / questions for user
 - none
 
 ## Log (newest first · max 10 lines · delete oldest)
+- 2026-10-05 P5 built: clients/telegram.py (token never logged), domain/notifier.py, agents/notifier.py (claim-then-send, release on failure, SKIP LOCKED), runs after each signal run when TELEGRAM_* set; chip + status flag; scripts/telegram_setup.py; simulate_telegram 26/26, pytest 69, other sims pass; found+fixed timestamptz param bug in claim SQL; real Telegram NOT tested (no token)
 - 2026-10-05 P4 built: indicators/{primitives,range_filter,supertrend,divergence,zones,fgi_v3}.py (Pine port), SignalAgent (5 min +30 s, bar cache, closed bars only), signals+signal_events migration 4c7e15481f58, /api/signals/latest, Signals panel; pytest 62, simulate_signals 24/24 (+ failures 47, ticker 17, news 27); live Docker ticks ok; parity_check.py ready but NO TradingView fixtures => parity UNPROVEN
 - 2026-10-05 P3 built + validated: RSS client (feedparser) + NewsAgent (15 min, +50 s), URL dedupe/normalisation, ticker tagging, /api/news, live News panel + chip; simulate_news 27/27, simulate_failures 47/47, simulate_ticker 17/17, pytest 37, web lint/type/build ok, prod audit clean; live: 4 sources, 112 items, re-run adds 0
 - 2026-10-05 P2 built + validated: realtime (hub, LISTEN, ticker gateway, /ws), Next dashboard (shadcn/base-ui, TanStack Query, shared WS client, price store, dark/light AA tokens); simulate_ticker 17/17, simulate_failures 47/47, web lint/type/build ok, prod audit clean; verified in headless Firefox at 1920/1440/1024/mobile, live ticks update w/o refresh, NOTIFY->/ws ok in Docker
@@ -21,10 +22,10 @@ F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 
 - 2026-10-05 full stack up (project tss): db/api/web healthy, worker up, proxy on <LAN_IP>:8088 (8080 taken by vidhive uvicorn); 401 w/o creds ok, db/api/web not reachable on LAN; docs+CHANGELOG updated for 8088; authenticated 200 + headers verified (hash reset by user request)
 - 2026-10-05 P0 step 6 done: backend/web Dockerfiles, docker-compose.yml (name: tss), Caddyfile (validated), api /api/health + worker skeleton; images built; api health 200 db ok, web 200, worker alembic ok; NOT run: full stack (BASIC_AUTH_HASH still placeholder)
 - 2026-10-05 P0 step 5 done: web/ Next 16.3.8 + React 19 + Tailwind 4, TS strict, output standalone; pnpm lint/type-check/build pass, audit clean; state codes confirmed from MEXC docs
-- 2026-10-05 P0 step 4 done: scripts/preflight.py 27 checks, 0 failed, 3 to review (state meaning, kline cap 2000, forming bar included); ruff+mypy clean; Arch §3.1/§4 + CHANGELOG v1.3.1 edited (time unit seconds, state codes confirmed from MEXC docs)
 
 ## Decisions & API quirks (one line each)
 - MEXC detail zero-fee fields flicker between calls (507, 507, 451 within a minute; our 6 h refresh once caught 70); badge is display-only
+- P5 decisions: events pushed = BUY/SELL/BULL_T/BEAR_T only (not TD); freshness windows 5m 15min / 15m 30min / 1h 2h (older events never sent); claim-then-send (at-most-once; a crash between claim and send loses that alert, never duplicates); release on any send failure; ~1.1 s between messages, max 20 per run, 429 retry_after<=30 s waits once else releases; price in message = latest snapshot last_price with its time (signal_events has no price column); plain text, no parse_mode; Telegram runs only when both env values non-empty
 - P4 decisions: ASSUMPTION to confirm via parity: ta.pivothigh/low centre strictly beyond the left bars, >= / <= the right bars (plateau => first bar); HTF (4H SuperTrend, 1H/4H RSI) = last CLOSED HTF bar at each bar close (documented deviation); ST direction + RSI are not plotted by the Pine script so parity compares plots only (R/S/M, EMAs, VWAP, events, s/r letters); rsi_divergence = regular divergence on the newest closed bar only (POS_REG/NEG_REG); zone_position labels TOP_SUB/TOP_MAIN/MID/BOTTOM_MAIN/BOTTOM_SUB; against_htf only for BUY/SELL/BULL_T/BEAR_T (TD = NULL); events scanned on the newest 3 bars, unique key keeps inserts idempotent; min 500 bars per signal TF and 100 per HTF series else skipped with a reason; single-pivot divergence flag (confluence factor 5) stays on while its pivot condition holds, then decays 20 bars (as Pine); VWAP anchored to UTC day using kline `vol`
 - P3 decisions: news tagged by TICKER only (whole-word, case-sensitive, >=3 chars, active contracts, stoplist in news_sources.yaml); headlines usually say 'Bitcoin' not 'BTC' so many items are untagged (contract detail has baseCoinName; using it = rule change, needs approval); CryptoPanic NOT implemented: API docs unreachable, endpoint/terms unverified, and no key set; items w/ implausible future date get published_at NULL; old (>5d) items skipped; NOTIFY payloads over 7000 B are shrunk to {truncated:true}; feeds are fetched with follow_redirects
 - P2 decisions: ws events are the primary refresh trigger (60 s fallback poll), ticks only feed price store; /ws served by api process (hub + LISTEN tss_events + MEXC ticker gateway for selected+pinned); dev needs API_ORIGIN + NEXT_PUBLIC_WS_URL; layout cols 1.75/1.4/0.55 at >=1280; News/Signals panels are placeholders (F8 = P3, F9 = P4); no keepPreviousData on window toggle (avoids mislabelled numbers)
@@ -63,6 +64,7 @@ F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 
 - backend/scripts/simulate_news.py — F8 acceptance (throwaway DB)
 - backend/src/tss/indicators/{primitives,range_filter,supertrend,divergence,zones,fgi_v3}.py — Pine port (MPL-2.0 headers on range_filter/divergence); agents/signal.py, db/models/signals.py, db/repositories/signals.py, api/routes/signals.py; web/src/features/signals/*
 - backend/scripts/{simulate_signals,parity_check}.py, backend/tests/{test_indicator_primitives,test_indicators}.py, tests/fixtures/tv/README.md
+- backend/src/tss/clients/telegram.py, domain/notifier.py, agents/notifier.py, db/repositories/signals.py (claim_events/release_events); backend/scripts/{telegram_setup,simulate_telegram}.py; tests/test_notifier.py
 - backend/scripts/preflight.py — public MEXC/RSS/WS checks, prints table (exit 1 on any ✗)
 - backend/config/{thresholds,denylist,news_sources}.yaml — Arch §13 values (RSS URLs proposed, verify in preflight)
 
