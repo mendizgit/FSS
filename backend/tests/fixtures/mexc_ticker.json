@@ -1,0 +1,24 @@
+{
+ "success": true,
+ "code": 0,
+ "data": [
+  {
+   "symbol": "BTC_USDT",
+   "lastPrice": 86206.1,
+   "fairPrice": 86206.1,
+   "holdVol": 576492936,
+   "fundingRate": 4.7e-05,
+   "volume24": 329632904,
+   "amount24": 2829482726.29238
+  },
+  {
+   "symbol": "ETH_USDT",
+   "lastPrice": 2720.71,
+   "fairPrice": 2720.77,
+   "holdVol": 87516353,
+   "fundingRate": 6.6e-05,
+   "volume24": 39480845,
+   "amount24": 1070821707.0711
+  }
+ ]
+}

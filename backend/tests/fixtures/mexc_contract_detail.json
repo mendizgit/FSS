@@ -1,0 +1,36 @@
+{
+ "success": true,
+ "code": 0,
+ "data": [
+  {
+   "symbol": "BTC_USDT",
+   "baseCoin": "BTC",
+   "quoteCoin": "USDT",
+   "settleCoin": "USDT",
+   "contractSize": 0.0001,
+   "state": 0,
+   "makerFeeRate": 0,
+   "takerFeeRate": 0.0001
+  },
+  {
+   "symbol": "ETH_USDT",
+   "baseCoin": "ETH",
+   "quoteCoin": "USDT",
+   "settleCoin": "USDT",
+   "contractSize": 0.01,
+   "state": 0,
+   "makerFeeRate": 0,
+   "takerFeeRate": 0.0001
+  },
+  {
+   "symbol": "BTC_USDC",
+   "baseCoin": "BTC",
+   "quoteCoin": "USDC",
+   "settleCoin": "USDC",
+   "contractSize": 0.0001,
+   "state": 0,
+   "makerFeeRate": 0,
+   "takerFeeRate": 0.0001
+  }
+ ]
+}
