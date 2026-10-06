@@ -17,6 +17,7 @@ from tss.clients.telegram import (
     TelegramRateLimited,
 )
 from tss.domain.notifier import (
+    NOTIFY_EVENTS,
     connectivity_message,
     display_symbol,
     format_event_message,
@@ -55,9 +56,7 @@ def test_sell_and_trend_only_variants() -> None:
     assert (
         "Time : 1 hour" in bull_only and "Signal : —" in bull_only and "Trend : BullT" in bull_only
     )
-    td = msg(event="TD_BULL", timeframe="5m")
-    assert "Signal : —" in td and "Trend : TD Bull" in td
-    assert "Trend : TD Bear" in msg(event="TD_BEAR")
+    assert "TD_BULL" not in NOTIFY_EVENTS and "TD_BEAR" not in NOTIFY_EVENTS
     bear_only = msg(event="BEAR_T")
     assert "Signal : —" in bear_only and "Trend : BearT" in bear_only
 

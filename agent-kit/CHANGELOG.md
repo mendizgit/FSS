@@ -1,5 +1,8 @@
 # Agent Kit Changelog
 
+## v1.3.4 — 2026-10-06 (user-approved Heikin-Ashi signals, branch feat/heikin-ashi)
+- Signals now run on Heikin-Ashi candles (signal bars 5m/15m/1h and the 1h/4h HTF series). New: `indicators/heikin_ashi.py`, `agents/signal_ha.py` (`SignalAgentHA`, agent name stays `signal`), wired in `control/pipeline.py`. Old `agents/signal.py` is kept unused for rollback (swap the import back). Classification is unchanged (real candles). Alert text unchanged. Telegram no longer pushes TD_BULL / TD_BEAR (user request; BUY/SELL/BULL_T/BEAR_T on 5m+15m remain; TD events are still computed and shown on the dashboard, and stay unnotified). No migration; existing rows stay. HA values (price_vs_vwap, zone) are in HA price space. TradingView parity still unproven.
+
 ## v1.3.3 — 2026-10-05 (user-approved signal coverage change)
 - Telegram alerts no longer carry the "Not financial advice" footer (user request); the `✗ Against the 4H trend` line remains when applicable. The dashboard footer notice and the `telegram_setup test` disclaimer were removed as well (user request, overrides PROJECT_GUIDELINES/ui-design notice rules; docs updated). README keeps its own disclaimer line.
 - Telegram now also pushes TD_BULL / TD_BEAR (user request; was BUY/SELL/bullT/bearT only). TD alert: `Signal : —`, `Trend : TD Bull|TD Bear`. Scope = every signal-engine symbol (momentum-selected + majors). Alerts are sent for 5m and 15m only (1h stays dashboard-only) and carry `Bar close : HH:MM IST` (close time of the signal bar).

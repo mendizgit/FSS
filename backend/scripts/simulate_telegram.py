@@ -1,6 +1,6 @@
 """F10 acceptance: the Notifier agent against a fake Telegram server (throwaway database).
 
-Covers: exactly-once delivery (incl. two agents racing), BUY/SELL/bullT/bearT/TD, stale events
+Covers: exactly-once delivery (incl. two agents racing), BUY/SELL/bullT/bearT (no TD), stale events
 skipped, message content, release + retry after failures (5xx, network, 401, flood control),
 pacing (>= 1.1 s between messages), per-run cap, "not configured", the Controller hook and that
 no token reaches the database. No network access; the token below is fake.
@@ -129,15 +129,15 @@ async def scenario_exactly_once(cfg: AppConfig) -> None:
     out = await agent.execute(uuid.uuid4(), now)
     meta = (out.result.meta if out.result else {}) or {}
     check(
-        "run SUCCESS and sent 6 (BUY, SELL, bullT, bearT, TD bull, TD bear)",
-        out.status == "SUCCESS" and meta["sent"] == 6 and len(tg.delivered) == 6,
+        "run SUCCESS and sent 4 (BUY, SELL, bullT, bearT)",
+        out.status == "SUCCESS" and meta["sent"] == 4 and len(tg.delivered) == 4,
         str(meta),
     )
     flags = await notified(c)
     check(
-        "stale and 1h events are not sent and stay unnotified; TD events are sent",
-        flags["SOL_USDT/5m/TD_BULL"]
-        and flags["XRP_USDT/15m/TD_BEAR"]
+        "stale, 1h and TD events are not sent and stay unnotified",
+        not flags["SOL_USDT/5m/TD_BULL"]
+        and not flags["XRP_USDT/15m/TD_BEAR"]
         and not flags["BTC_USDT/1h/BUY"]
         and not flags["AAA_USDT/5m/BUY"],
     )
@@ -189,11 +189,11 @@ async def scenario_exactly_once(cfg: AppConfig) -> None:
     again = await agent.execute(uuid.uuid4(), now + timedelta(seconds=30))
     check(
         "second run sends nothing: each event exactly once",
-        again.result is not None and again.result.rows_out == 0 and len(tg.delivered) == 6,
+        again.result is not None and again.result.rows_out == 0 and len(tg.delivered) == 4,
     )
     check(
         "pacing: >= 1.1 s between consecutive messages",
-        tg.sleeps == [1.1] * 5,
+        tg.sleeps == [1.1] * 3,
         str(tg.sleeps),
     )
 

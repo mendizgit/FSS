@@ -23,7 +23,8 @@ import asyncpg  # type: ignore[import-untyped]
 from sqlalchemy import func, select
 
 import simulate_failures as sf
-from tss.agents.signal import SignalAgent, floor_to
+from tss.agents.signal_ha import SignalAgentHA as SignalAgent
+from tss.agents.signal_ha import floor_to
 from tss.clients.models import Kline
 from tss.core.errors import DataSourceError
 from tss.core.settings import AppConfig, load_config_or_exit
@@ -92,7 +93,7 @@ class SynthFutures(sf.FakeFutures):
 
 def pick_now() -> datetime:
     """First 5-minute boundary +30 s (from NOW) with an event in the last 3 bars."""
-    from tss.agents.signal import SIGNAL_TFS, TIMEFRAMES, Bar, compute_symbol
+    from tss.agents.signal_ha import SIGNAL_TFS, TIMEFRAMES, Bar, compute_symbol
 
     fake = SynthFutures()
     series = {

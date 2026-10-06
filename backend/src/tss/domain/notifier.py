@@ -17,7 +17,7 @@ from html import escape
 
 from tss.core.time import to_ist
 
-NOTIFY_EVENTS = ("BUY", "SELL", "BULL_T", "BEAR_T", "TD_BULL", "TD_BEAR")
+NOTIFY_EVENTS = ("BUY", "SELL", "BULL_T", "BEAR_T")  # TD_BULL / TD_BEAR are not pushed
 NOTIFY_TIMEFRAMES = ("5m", "15m")  # 1h events are shown on the dashboard only
 
 TIME_LABEL = {"5m": "5 min", "15m": "15 min", "1h": "1 hour"}
@@ -27,8 +27,6 @@ TREND_LABEL = {
     "BULL_T": "BullT",
     "SELL": "BearT",
     "BEAR_T": "BearT",
-    "TD_BULL": "TD Bull",
-    "TD_BEAR": "TD Bear",
 }
 
 # A late alert is worse than none: events older than this (by timeframe) are never sent.
