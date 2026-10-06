@@ -1,9 +1,15 @@
 import { Badge } from "@/components/ui/badge";
 import { Tip } from "@/components/tss/tip";
 
-/** MEXC USDT perpetual on TradingView, e.g. BTC_USDT -> MEXC:BTCUSDT.P */
+/**
+ * MEXC USDT perpetual on TradingView, e.g. BTC_USDT -> MEXC:BTCUSDT.P.
+ * MEXC names tokenized stocks BASESTOCK_USDT, TradingView lists them as BASEUSDT.P
+ * (observed for MRVL; not verified for every STOCK contract).
+ */
 function tradingViewUrl(symbol: string): string {
-  return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(`MEXC:${symbol.replace("_", "")}.P`)}`;
+  const [base = "", quote = ""] = symbol.split("_");
+  const tvBase = base.length > 5 && base.endsWith("STOCK") ? base.slice(0, -5) : base;
+  return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(`MEXC:${tvBase}${quote}.P`)}`;
 }
 
 export function SymbolLabel({
