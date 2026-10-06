@@ -32,6 +32,13 @@ class AgentRunOut(BaseModel):
     meta: dict[str, Any] | None
 
 
+class PauseOut(BaseModel):
+    paused: bool
+    manual: bool  # a Pause / Start choice from the dashboard is in effect
+    reason: str | None
+    until: datetime | None
+
+
 class StatusOut(BaseModel):
     state: str
     reason: str | None
@@ -43,6 +50,7 @@ class StatusOut(BaseModel):
     telegram_configured: bool
     telegram_paused: bool
     flags: dict[str, bool]
+    pause: PauseOut
     now: datetime
 
 
@@ -175,11 +183,23 @@ class SignalRowOut(BaseModel):
     recent_events: list[RecentEventOut] = []  # BUY/SELL/BULL_T/BEAR_T, newest first
 
 
+class SetupOut(BaseModel):
+    bias: str  # "long" | "short"
+    trigger_timeframe: str  # 5m | 15m
+    trigger_event: str
+    trigger_bars_ago: int
+    against_htf: bool | None  # informational only
+    minutes_ago: int  # age of the triggering event
+    htf_event: str
+    htf_bars_ago: int
+
+
 class SignalSymbolOut(BaseModel):
     symbol: str
     group: str  # "majors" | "momentum"
     pinned: bool
     selection_rank: int | None
+    setup: SetupOut | None = None  # Long / Short setup (domain/setups.py)
     rows: list[SignalRowOut]
 
 

@@ -7,9 +7,9 @@ import { SymbolLabel } from "@/components/tss/symbol-label";
 import { Tip } from "@/components/tss/tip";
 import { TimeText } from "@/components/tss/time-text";
 import { cn } from "@/lib/utils";
-import type { SignalRow, SignalSymbol } from "@/types/api";
+import type { SignalRow, SignalSetup, SignalSymbol } from "@/types/api";
 
-import { EVENT_META, isFresh, TF_MINUTES, ZONE_LABEL, type Setup } from "./meta";
+import { EVENT_META, isFresh, TF_MINUTES, ZONE_LABEL } from "./meta";
 
 const TONE = { up: "text-up", down: "text-down", muted: "text-muted-foreground" } as const;
 
@@ -90,14 +90,13 @@ function Row({ row, now }: { row: SignalRow; now: number }) {
   );
 }
 
-function SetupBadge({ setup }: { setup: Setup }) {
-  if (setup.bias === "neutral" || setup.trigger === null) return null;
+function SetupBadge({ setup }: { setup: SignalSetup }) {
   const long = setup.bias === "long";
-  const htf = setup.againstHtf;
+  const htf = setup.against_htf;
   return (
     <span className="flex items-center gap-1.5 text-[11px]">
       <span className={cn("font-semibold", long ? "text-up" : "text-down")}>
-        {long ? "Long" : "Short"} · {setup.trigger.timeframe} + 1h
+        {long ? "Long" : "Short"} · {setup.trigger_timeframe} + 1h
       </span>
       {htf === null ? null : (
         <span className={htf ? "text-warn" : "text-muted-foreground"}>{htf ? "against 4H" : "with 4H"}</span>
@@ -106,13 +105,13 @@ function SetupBadge({ setup }: { setup: Setup }) {
   );
 }
 
-export function SignalCard({ item, now, setup }: { item: SignalSymbol; now: number; setup?: Setup }) {
+export function SignalCard({ item, now }: { item: SignalSymbol; now: number }) {
   return (
     <article aria-label={`Signals for ${item.symbol}`} className="border-b border-border">
       <header className="flex items-center gap-3 px-3 pt-2 pb-1">
         <SymbolLabel symbol={item.symbol} context={item.pinned} hideQuote />
         <LivePrice symbol={item.symbol} fallback={null} className="text-xs text-muted-foreground" />
-        {setup ? <SetupBadge setup={setup} /> : null}
+        {item.setup ? <SetupBadge setup={item.setup} /> : null}
       </header>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[440px] border-collapse text-[12px]">

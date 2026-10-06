@@ -16,12 +16,7 @@ from tss.clients.telegram import (
     TelegramPermanentError,
     TelegramRateLimited,
 )
-from tss.domain.notifier import (
-    NOTIFY_EVENTS,
-    connectivity_message,
-    display_symbol,
-    format_event_message,
-)
+from tss.domain.notifier import connectivity_message, display_symbol, format_setup_message
 
 TOKEN = "123456:SECRET-TOKEN-VALUE"
 
@@ -29,42 +24,48 @@ TOKEN = "123456:SECRET-TOKEN-VALUE"
 def msg(**kw: object) -> str:
     base: dict[str, object] = {
         "symbol": "UMA_USDT",
-        "timeframe": "5m",
-        "event": "BUY",
+        "bias": "long",
+        "trigger_timeframe": "5m",
+        "trigger_event": "BUY",
+        "htf_event": "BULL_T",
+        "htf_bars_ago": 3,
+        "trigger_bar_close_time": datetime(2026, 10, 6, 9, 5, tzinfo=UTC),  # 14:35 IST
         "against_htf": False,
-        "bar_close_time": datetime(2026, 10, 6, 9, 5, tzinfo=UTC),  # 14:35 IST
     }
-    return format_event_message(**{**base, **kw})  # type: ignore[arg-type]
+    return format_setup_message(**{**base, **kw})  # type: ignore[arg-type]
 
 
-def test_buy_message_is_exact() -> None:
+def test_long_message_is_exact() -> None:
     assert msg() == (
-        "<b>UMAUSDT.P</b>\nTime : 5 min\nBar close : 14:35 IST\nSignal : 🟢 Buy\nTrend : BullT"
+        "<b>UMAUSDT.P</b>\nSetup : 🟢 Long\nTrigger : 5 min Buy\n"
+        "1h confirm : BullT, 3 bars ago\nBar close : 14:35 IST\n4H trend : ✓ With"
     )
 
 
-def test_sell_and_trend_only_variants() -> None:
-    sell = msg(event="SELL", timeframe="15m", symbol="BTC_USDT")
-    assert sell.splitlines()[:5] == [
+def test_short_variant_and_ago_wording() -> None:
+    short = msg(
+        symbol="BTC_USDT",
+        bias="short",
+        trigger_timeframe="15m",
+        trigger_event="BEAR_T",
+        htf_event="SELL",
+        htf_bars_ago=1,
+    )
+    assert short.splitlines() == [
         "<b>BTCUSDT.P</b>",
-        "Time : 15 min",
+        "Setup : 🔴 Short",
+        "Trigger : 15 min BearT",
+        "1h confirm : Sell, 1 bar ago",
         "Bar close : 14:35 IST",
-        "Signal : 🔴 Sell",
-        "Trend : BearT",
+        "4H trend : ✓ With",
     ]
-    bull_only = msg(event="BULL_T", timeframe="1h")
-    assert (
-        "Time : 1 hour" in bull_only and "Signal : —" in bull_only and "Trend : BullT" in bull_only
-    )
-    assert "TD_BULL" not in NOTIFY_EVENTS and "TD_BEAR" not in NOTIFY_EVENTS
-    bear_only = msg(event="BEAR_T")
-    assert "Signal : —" in bear_only and "Trend : BearT" in bear_only
+    assert "1h confirm : BullT, now" in msg(htf_bars_ago=0)
 
 
-def test_against_4h_marker_and_escaping() -> None:
-    assert msg(against_htf=True).endswith("\n<i>✗ Against the 4H trend</i>")
-    assert "financial advice" not in msg(against_htf=True) and "financial advice" not in msg()
-    assert "✗" not in msg(against_htf=None) and "✗" not in msg(against_htf=False)
+def test_4h_line_is_informational_and_escaping() -> None:
+    assert msg(against_htf=True).endswith("4H trend : ✗ Against")
+    assert msg(against_htf=None).endswith("4H trend : —")
+    assert "financial advice" not in msg(against_htf=True)
     weird = msg(symbol="A<b>&_USDT")
     assert "<b>A&lt;b&gt;&amp;USDT.P</b>" in weird  # symbols are escaped, markup cannot be injected
 

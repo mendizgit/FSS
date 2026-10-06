@@ -8,16 +8,16 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tss.api.deps import get_config, get_session
-from tss.api.schemas.models import AgentRunOut, StatusOut, UniverseSummaryOut
-from tss.control.flags import news_on, telegram_on
+from tss.api.schemas.models import AgentRunOut, PauseOut, StatusOut, UniverseSummaryOut
+from tss.control.flags import RUN, news_on, telegram_on
 from tss.control.schedule import (
-    in_quiet_hours,
     next_news,
     next_pipeline,
     next_retention,
     next_signal,
     next_snapshot,
     next_universe,
+    pause_state,
 )
 from tss.core.settings import AppConfig
 from tss.core.time import utc_now
@@ -45,12 +45,19 @@ async def status(session: Session, cfg: Config) -> StatusOut:
     flags = await ops.get_flags(session)
     tg_on = telegram_on(flags, cfg.settings.telegram_configured, cfg.settings.telegram_paused)
     q = cfg.thresholds.quiet_hours
-    paused = in_quiet_hours(now, q.pause_hour_ist, q.resume_hour_ist)
+    override = await ops.get_flag_row(session, RUN)
+    pause = pause_state(
+        now,
+        override.enabled if override else None,
+        override.updated_at if override else None,
+        q.pause_hour_ist,
+        q.resume_hour_ist,
+    )
     return StatusOut(
-        state="PAUSED" if paused else (state.state if state else "UNKNOWN"),
+        state="PAUSED" if pause.paused else (state.state if state else "UNKNOWN"),
         reason=(
-            f"daily pause {q.pause_hour_ist:02d}:00-{q.resume_hour_ist:02d}:00 IST"
-            if paused
+            pause.reason
+            if pause.paused
             else (state.reason if state else "worker has not reported yet")
         ),
         state_updated_at=state.updated_at if state else None,
@@ -82,6 +89,9 @@ async def status(session: Session, cfg: Config) -> StatusOut:
         telegram_configured=cfg.settings.telegram_configured,
         telegram_paused=cfg.settings.telegram_configured and not tg_on,
         flags={"news": news_on(flags), "telegram": tg_on},
+        pause=PauseOut(
+            paused=pause.paused, manual=pause.manual, reason=pause.reason, until=pause.until
+        ),
         now=now,
     )
 

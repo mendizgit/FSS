@@ -34,6 +34,7 @@ export interface StatusResponse {
   telegram_configured: boolean;
   telegram_paused: boolean;
   flags: { news: boolean; telegram: boolean };
+  pause: { paused: boolean; manual: boolean; reason: string | null; until: string | null };
   now: string;
 }
 
@@ -164,11 +165,23 @@ export interface SignalRow {
   recent_events: RecentEvent[];
 }
 
+export interface SignalSetup {
+  bias: "long" | "short";
+  trigger_timeframe: "5m" | "15m";
+  trigger_event: string;
+  trigger_bars_ago: number;
+  against_htf: boolean | null;
+  minutes_ago: number;
+  htf_event: string;
+  htf_bars_ago: number;
+}
+
 export interface SignalSymbol {
   symbol: string;
   group: "majors" | "momentum";
   pinned: boolean;
   selection_rank: number | null;
+  setup: SignalSetup | null;
   rows: SignalRow[];
 }
 

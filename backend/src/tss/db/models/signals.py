@@ -45,3 +45,27 @@ class SignalEvent(Base):
     event: Mapped[str] = mapped_column(String(8), primary_key=True)
     against_htf: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     notified_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+
+class SignalSetup(Base):
+    """Latest Long / Short setup per symbol, for exactly-once Telegram alerts (domain/setups.py).
+
+    A symbol is alerted when its setup appears (notified_at NULL -> claimed -> sent). It is alerted
+    again only when the setup is replaced by a different one (other bias or other trigger event).
+    """
+
+    __tablename__ = "signal_setups"
+    __table_args__ = (CheckConstraint("bias IN ('long', 'short')", name="bias"),)
+
+    symbol: Mapped[str] = mapped_column(String(32), primary_key=True)
+    bias: Mapped[str] = mapped_column(String(5))
+    active: Mapped[bool] = mapped_column(Boolean)
+    trigger_timeframe: Mapped[str] = mapped_column(String(4))
+    trigger_event: Mapped[str] = mapped_column(String(8))
+    trigger_bar_close_time: Mapped[datetime] = mapped_column(UTCDateTime)
+    against_htf: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    htf_event: Mapped[str] = mapped_column(String(8))
+    htf_bars_ago: Mapped[int] = mapped_column(Integer)
+    detected_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    notified_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime)

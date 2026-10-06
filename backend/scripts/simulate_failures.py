@@ -298,6 +298,52 @@ async def scenario_probe_pause(cfg: AppConfig) -> None:
     check("state leaves HALTED", await state_of(c) != "HALTED", str(await state_of(c)))
 
 
+async def scenario_manual_pause(cfg: AppConfig) -> None:
+    print("\n1c. Dashboard Pause / Start")
+    fake = FakeFutures()
+    c = make_controller(cfg, fake, FakeSpot())
+    await c.universe_job()
+    await c.snapshot_job()
+    await c.pause_watch_job()  # first look: remembers 'running', no catch-up
+    app = create_app(cfg)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+        async with httpx.AsyncClient(transport=transport, base_url="http://sim") as client:
+            resp = await client.post("/api/control/run", json={"enabled": False})
+            body = resp.json()
+            check(
+                "POST pause: paused, manual, with an expiry",
+                resp.status_code == 200
+                and body["paused"]
+                and body["manual"]
+                and "manual pause until" in (body["reason"] or ""),
+                str(body),
+            )
+            st = (await client.get("/api/status")).json()
+            check(
+                "/api/status reports PAUSED with the manual reason",
+                st["state"] == "PAUSED"
+                and st["pause"]["manual"]
+                and "manual pause" in st["reason"],
+                str(st["reason"]),
+            )
+            calls = fake.data_calls
+            await c.snapshot_job()
+            await c.pipeline_job()
+            check("paused: no data endpoint is called", fake.data_calls == calls)
+            await c.pause_watch_job()
+            check("still paused: no catch-up", fake.data_calls == calls)
+            resp = await client.post("/api/control/run", json={"enabled": True})
+            body = resp.json()
+            check(
+                "POST start: running, manual",
+                resp.status_code == 200 and not body["paused"] and body["manual"],
+                str(body),
+            )
+    await c.pause_watch_job()
+    check("start: catch-up runs right away (snapshot/pipeline)", fake.data_calls > calls)
+
+
 async def scenario_malformed(cfg: AppConfig) -> None:
     print("\n2. Malformed response")
 
@@ -711,6 +757,8 @@ async def main() -> int:
         await reset_sim_data(scfg)
         await scenario_probe_pause(scfg)
         await reset_sim_data(scfg)
+        await scenario_manual_pause(scfg)
+        await reset_sim_data(scfg)
         await scenario_malformed(scfg)
         await scenario_http_retry()
         await reset_sim_data(scfg)
@@ -742,7 +790,8 @@ async def reset_sim_data(scfg: AppConfig) -> None:
                 text(
                     "TRUNCATE agent_runs, system_state, market_snapshots, "
                     "klines_15m, daily_opens, momentum_rankings, classifications, "
-                    "market_movers, news_items, signals, signal_events, contracts, control_flags"
+                    "market_movers, news_items, signals, signal_events, signal_setups, "
+                    "contracts, control_flags"
                 )
             )
     finally:

@@ -1,4 +1,4 @@
-"""POST /api/flags/{key}: persistent on/off switches for News collection and Telegram alerts."""
+"""POST /api/flags/{key} (News / Telegram switches) and POST /api/control/run (Pause / Start)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,9 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tss.api.deps import get_config, get_session
-from tss.control.flags import news_on, telegram_on
+from tss.api.schemas.models import PauseOut
+from tss.control.flags import RUN, news_on, telegram_on
+from tss.control.schedule import pause_state
 from tss.core.settings import AppConfig
 from tss.core.time import utc_now
 from tss.db.repositories import ops
@@ -47,4 +49,26 @@ async def set_flag(
                 flags, cfg.settings.telegram_configured, cfg.settings.telegram_paused
             ),
         }
+    )
+
+
+class RunIn(BaseModel):
+    enabled: bool  # True = Start, False = Pause
+
+
+@router.post("/control/run", response_model=PauseOut)
+async def set_run(
+    body: RunIn,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    cfg: Annotated[AppConfig, Depends(get_config)],
+) -> PauseOut:
+    """Dashboard Pause / Start. Pause holds until the next resume hour (06:00 IST) or Start;
+    Start holds until the next pause hour (00:00 IST) or Pause. See control/schedule.pause_state."""
+    now = utc_now()
+    await ops.set_flag(session, RUN, body.enabled, now)
+    await session.commit()
+    q = cfg.thresholds.quiet_hours
+    state = pause_state(now, body.enabled, now, q.pause_hour_ist, q.resume_hour_ist)
+    return PauseOut(
+        paused=state.paused, manual=state.manual, reason=state.reason, until=state.until
     )

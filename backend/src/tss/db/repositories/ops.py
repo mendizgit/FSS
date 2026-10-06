@@ -135,6 +135,12 @@ async def get_flags(session: AsyncSession) -> dict[str, bool]:
     return {r.key: r.enabled for r in rows}
 
 
+async def get_flag_row(session: AsyncSession, key: str) -> ControlFlag | None:
+    return (
+        await session.execute(select(ControlFlag).where(ControlFlag.key == key))
+    ).scalar_one_or_none()
+
+
 async def set_flag(session: AsyncSession, key: str, enabled: bool, now: datetime) -> None:
     stmt = insert(ControlFlag).values(key=key, enabled=enabled, updated_at=now)
     await session.execute(

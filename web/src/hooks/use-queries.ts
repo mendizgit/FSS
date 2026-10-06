@@ -78,3 +78,12 @@ export function useSetFlag() {
     onSuccess: () => client.invalidateQueries({ queryKey: ["status"] }),
   });
 }
+
+export function useSetRun() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiPost<{ paused: boolean; manual: boolean; reason: string | null }>("/control/run", { enabled }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["status"] }),
+  });
+}

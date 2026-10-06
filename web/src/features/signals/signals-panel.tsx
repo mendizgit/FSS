@@ -11,19 +11,13 @@ import { useSignals, useStatus } from "@/hooks/use-queries";
 import type { SignalSymbol } from "@/types/api";
 
 import { SignalCard } from "./signal-card";
-import { classifySetup, type Setup } from "./meta";
 
-interface Entry {
-  item: SignalSymbol;
-  setup: Setup;
-}
-
-function SymbolList({ items, now, empty }: { items: Entry[]; now: number; empty: React.ReactNode }) {
+function SymbolList({ items, now, empty }: { items: SignalSymbol[]; now: number; empty: React.ReactNode }) {
   if (items.length === 0) return <>{empty}</>;
   return (
     <>
-      {items.map(({ item, setup }) => (
-        <SignalCard key={item.symbol} item={item} now={now} setup={setup.bias === "neutral" ? undefined : setup} />
+      {items.map((item) => (
+        <SignalCard key={item.symbol} item={item} now={now} />
       ))}
     </>
   );
@@ -38,14 +32,14 @@ export function SignalsPanel() {
   const stale = signals.isError && data !== undefined;
   const run = status.data?.runs.find((r) => r.agent === "signal");
   const skipped = Object.keys((run?.meta?.skipped ?? {}) as Record<string, string>).length;
-  const entries: Entry[] = (data?.symbols ?? []).map((item) => ({ item, setup: classifySetup(item.rows) }));
-  const byFreshness = (a: Entry, b: Entry) =>
-    a.setup.minutesAgo - b.setup.minutesAgo ||
-    (a.item.selection_rank ?? 1e9) - (b.item.selection_rank ?? 1e9);
-  const majors = entries.filter((e) => e.item.group === "majors");
-  const momentum = entries.filter((e) => e.item.group !== "majors");
-  const longs = momentum.filter((e) => e.setup.bias === "long").sort(byFreshness);
-  const shorts = momentum.filter((e) => e.setup.bias === "short").sort(byFreshness);
+  const symbols = data?.symbols ?? [];
+  const byFreshness = (a: SignalSymbol, b: SignalSymbol) =>
+    (a.setup?.minutes_ago ?? 0) - (b.setup?.minutes_ago ?? 0) ||
+    (a.selection_rank ?? 1e9) - (b.selection_rank ?? 1e9);
+  const majors = symbols.filter((s) => s.group === "majors");
+  const momentum = symbols.filter((s) => s.group !== "majors");
+  const longs = momentum.filter((s) => s.setup?.bias === "long").sort(byFreshness);
+  const shorts = momentum.filter((s) => s.setup?.bias === "short").sort(byFreshness);
   const hiddenNeutral = momentum.length - longs.length - shorts.length;
   const nextRun = status.data?.next_runs.signal ?? null;
 

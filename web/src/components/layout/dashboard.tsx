@@ -10,7 +10,7 @@ import { ClassificationPanel } from "@/features/classification/classification-pa
 import { MoversPanel } from "@/features/movers/movers-panel";
 import { NewsPanel } from "@/features/news/news-panel";
 import { SignalsPanel } from "@/features/signals/signals-panel";
-import { useSetFlag, useStatus } from "@/hooks/use-queries";
+import { useSetFlag, useSetRun, useStatus } from "@/hooks/use-queries";
 import { StatusBar } from "@/features/status-bar/status-bar";
 import { cn } from "@/lib/utils";
 
@@ -54,6 +54,7 @@ export function Dashboard() {
     (tab === id ? "flex" : "hidden") + (id === "news" && !newsOpen ? " md:hidden" : " md:flex");
   const status = useStatus().data;
   const setFlag = useSetFlag();
+  const setRun = useSetRun();
   const flags = status?.flags;
   const flagButton = (key: "news" | "telegram", label: string, on: boolean, disabled: boolean) => (
     <Button
@@ -84,6 +85,24 @@ export function Dashboard() {
       <StatusBar
         actions={
           <>
+          {status ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={setRun.isPending}
+              onClick={() => setRun.mutate(status.pause.paused)}
+              title={
+                status.pause.paused
+                  ? `${status.pause.reason ?? "Paused"}. Click to start now: it runs until 00:00 IST.`
+                  : status.pause.manual
+                    ? `${status.pause.reason ?? "Running"}. Click to pause until 06:00 IST.`
+                    : "Running. Click to pause until 06:00 IST (it also pauses automatically at 00:00 IST)."
+              }
+            >
+              <span aria-hidden className={cn("size-2 rounded-full", status.pause.paused ? "bg-muted-foreground" : "bg-up")} />
+              {status.pause.paused ? "Start system" : "Pause system"}
+            </Button>
+          ) : null}
           {flags ? flagButton("news", "News feed", flags.news, false) : null}
           {flags ? flagButton("telegram", "Telegram", flags.telegram, !status?.telegram_configured) : null}
           <Button

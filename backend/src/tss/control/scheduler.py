@@ -52,10 +52,10 @@ def build_scheduler(controller: Controller) -> AsyncIOScheduler:
     scheduler.add_job(
         controller.signal_job,
         "cron",
-        # every 5-min bar close; at :00/:15/:30/:45 the pipeline runs it once more right after it
-        # saves the new selection
+        # every 5-min bar close, +5 s; at :00/:15/:30/:45 the pipeline (+20 s) runs it once more
+        # right after it saves the new selection
         minute="*/5",
-        second=20,
+        second=5,
         id="signal",
         misfire_grace_time=150,
         **common,
@@ -84,6 +84,14 @@ def build_scheduler(controller: Controller) -> AsyncIOScheduler:
         seconds=60,
         id="recovery",
         misfire_grace_time=30,
+        **common,
+    )
+    scheduler.add_job(
+        controller.pause_watch_job,
+        "interval",
+        seconds=10,
+        id="pause_watch",
+        misfire_grace_time=10,
         **common,
     )
     scheduler.add_job(

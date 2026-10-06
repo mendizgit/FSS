@@ -7,7 +7,7 @@ from tss.db.models.momentum import MomentumRanking
 from tss.db.models.movers import MarketMover
 from tss.db.models.news import NewsItem
 from tss.db.models.ops import AgentRun, ControlFlag, SystemState
-from tss.db.models.signals import Signal, SignalEvent
+from tss.db.models.signals import Signal, SignalEvent, SignalSetup
 
 __all__ = [
     "AgentRun",
@@ -22,5 +22,6 @@ __all__ = [
     "NewsItem",
     "Signal",
     "SignalEvent",
+    "SignalSetup",
     "SystemState",
 ]

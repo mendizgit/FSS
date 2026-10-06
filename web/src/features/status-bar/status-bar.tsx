@@ -31,7 +31,7 @@ function SystemState({ status, error }: { status: StatusResponse | undefined; er
     RUNNING: { icon: CheckCircle2, text: "Running", tone: "border-up/50 text-up bg-up-bg" },
     WARMING_UP: { icon: Hourglass, text: "Warming up", tone: "border-warn/50 text-warn bg-warn-bg" },
     DEGRADED: { icon: AlertTriangle, text: "Degraded", tone: "border-warn/50 text-warn bg-warn-bg" },
-    PAUSED: { icon: Hourglass, text: "Paused (quiet hours)", tone: "border-border text-muted-foreground" },
+    PAUSED: { icon: Hourglass, text: "Paused", tone: "border-border text-muted-foreground" },
     HALTED: { icon: AlertOctagon, text: "Halted", tone: "border-crit/60 text-crit bg-crit-bg" },
     UNKNOWN: { icon: AlertTriangle, text: "No worker data", tone: "border-warn/50 text-warn bg-warn-bg" },
     UNREACHABLE: { icon: WifiOff, text: "API unreachable", tone: "border-crit/60 text-crit bg-crit-bg" },

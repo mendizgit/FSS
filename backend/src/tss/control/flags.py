@@ -4,6 +4,7 @@ from __future__ import annotations
 
 NEWS = "news"
 TELEGRAM = "telegram"
+RUN = "run"  # dashboard Pause / Start override; updated_at decides when it expires
 KEYS = (NEWS, TELEGRAM)
 
 

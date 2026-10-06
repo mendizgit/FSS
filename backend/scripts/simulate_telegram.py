@@ -1,9 +1,10 @@
 """F10 acceptance: the Notifier agent against a fake Telegram server (throwaway database).
 
-Covers: exactly-once delivery (incl. two agents racing), BUY/SELL/bullT/bearT (no TD), stale events
-skipped, message content, release + retry after failures (5xx, network, 401, flood control),
-pacing (>= 1.1 s between messages), per-run cap, "not configured", the Controller hook and that
-no token reaches the database. No network access; the token below is fake.
+Covers: exactly-once delivery of new Long/Short setups (incl. two agents racing), stale / inactive /
+already-sent setups skipped, message content (incl. the 4H line), release + retry after failures
+(5xx, network, 401, flood control), pacing (>= 1.1 s between messages), per-run cap,
+"not configured", the Controller hook and that no token reaches the database.
+No network access; the token below is fake.
 
 Run: uv run python scripts/simulate_telegram.py
 """
@@ -28,7 +29,7 @@ from tss.agents.base import SUCCESS, AgentResult, BaseAgent
 from tss.agents.notifier import NotifierAgent
 from tss.clients.telegram import TelegramClient
 from tss.core.settings import AppConfig, load_config_or_exit
-from tss.db.models import MarketSnapshot, SignalEvent
+from tss.db.models import MarketSnapshot, SignalSetup
 from tss.db.repositories import ops as ops_repo
 
 check = sf.check
@@ -70,14 +71,33 @@ class FakeTelegram:
 
 
 def event(
-    symbol: str, tf: str, name: str, closed: datetime, against: bool | None = False
-) -> SignalEvent:
-    return SignalEvent(
-        symbol=symbol, timeframe=tf, bar_close_time=closed, event=name, against_htf=against
+    symbol: str,
+    tf: str,
+    name: str,
+    closed: datetime,
+    against: bool | None = False,
+    *,
+    active: bool = True,
+    notified_at: datetime | None = None,
+) -> SignalSetup:
+    """A Long (BUY / BULL_T) or Short (SELL / BEAR_T) setup detected at `closed`."""
+    return SignalSetup(
+        symbol=symbol,
+        bias="long" if name in ("BUY", "BULL_T") else "short",
+        active=active,
+        trigger_timeframe=tf,
+        trigger_event=name,
+        trigger_bar_close_time=closed,
+        against_htf=against,
+        htf_event="BULL_T" if name in ("BUY", "BULL_T") else "BEAR_T",
+        htf_bars_ago=3,
+        detected_at=closed,
+        notified_at=notified_at,
+        updated_at=closed,
     )
 
 
-async def add(c: Any, rows: list[SignalEvent]) -> None:
+async def add(c: Any, rows: list[SignalSetup]) -> None:
     async with c.deps.session_factory() as s:
         s.add_all(rows)
         await s.commit()
@@ -85,8 +105,8 @@ async def add(c: Any, rows: list[SignalEvent]) -> None:
 
 async def notified(c: Any) -> dict[str, bool]:
     async with c.deps.session_factory() as s:
-        rows = (await s.execute(select(SignalEvent))).scalars()
-        return {f"{r.symbol}/{r.timeframe}/{r.event}": r.notified_at is not None for r in rows}
+        rows = (await s.execute(select(SignalSetup))).scalars()
+        return {r.symbol: r.notified_at is not None for r in rows}
 
 
 def agent_for(c: Any, tg: FakeTelegram, **kw: Any) -> NotifierAgent:
@@ -104,7 +124,7 @@ async def seed_price(c: Any, now: datetime) -> None:
 
 
 async def scenario_exactly_once(cfg: AppConfig) -> None:
-    print("\n1. Exactly once, event types, staleness, content")
+    print("\n1. Exactly once, staleness, content")
     c = sf.make_controller(cfg, sf.FakeFutures(), sf.FakeSpot())
     now = datetime.now(UTC).replace(microsecond=0)
     closed = now - timedelta(minutes=1)
@@ -113,15 +133,11 @@ async def scenario_exactly_once(cfg: AppConfig) -> None:
         c,
         [
             event("BTC_USDT", "5m", "BUY", closed, True),
-            event("ETH_USDT", "5m", "SELL", closed, False),
-            event("BTC_USDT", "15m", "BULL_T", closed, False),
-            event("ETH_USDT", "15m", "BEAR_T", closed, None),
-            event("SOL_USDT", "5m", "TD_BULL", closed, None),
-            event("XRP_USDT", "15m", "TD_BEAR", closed, None),
-            event("BTC_USDT", "1h", "BUY", closed, False),  # 1h is not pushed
-            event(
-                "AAA_USDT", "5m", "BUY", now - timedelta(minutes=40), False
-            ),  # stale: 5m window is 15 min
+            event("ETH_USDT", "15m", "SELL", closed, False),
+            event("SOL_USDT", "5m", "BULL_T", closed, None),
+            event("XRP_USDT", "15m", "BEAR_T", closed, False, active=False),  # ended: not sent
+            event("AAA_USDT", "5m", "BUY", now - timedelta(minutes=40), False),  # stale (> 10 min)
+            event("BBB_USDT", "5m", "BUY", closed, False, notified_at=closed),  # already sent
         ],
     )
     tg = FakeTelegram()
@@ -129,52 +145,47 @@ async def scenario_exactly_once(cfg: AppConfig) -> None:
     out = await agent.execute(uuid.uuid4(), now)
     meta = (out.result.meta if out.result else {}) or {}
     check(
-        "run SUCCESS and sent 4 (BUY, SELL, bullT, bearT)",
-        out.status == "SUCCESS" and meta["sent"] == 4 and len(tg.delivered) == 4,
+        "run SUCCESS and sent 3 (the new active setups)",
+        out.status == "SUCCESS" and meta["sent"] == 3 and len(tg.delivered) == 3,
         str(meta),
     )
     flags = await notified(c)
     check(
-        "stale, 1h and TD events are not sent and stay unnotified",
-        not flags["SOL_USDT/5m/TD_BULL"]
-        and not flags["XRP_USDT/15m/TD_BEAR"]
-        and not flags["BTC_USDT/1h/BUY"]
-        and not flags["AAA_USDT/5m/BUY"],
+        "ended, stale and already-sent setups are not (re)sent",
+        not flags["XRP_USDT"] and not flags["AAA_USDT"] and len(tg.delivered) == 3,
     )
     check(
-        "the delivered BUY/SELL/bullT/bearT events are marked notified once",
-        all(
-            flags[k]
-            for k in (
-                "BTC_USDT/5m/BUY",
-                "ETH_USDT/5m/SELL",
-                "BTC_USDT/15m/BULL_T",
-                "ETH_USDT/15m/BEAR_T",
-            )
-        ),
+        "the delivered setups are marked notified once",
+        all(flags[k] for k in ("BTC_USDT", "ETH_USDT", "SOL_USDT")),
     )
-    by_event = {
-        "BUY": next(m for m in tg.delivered if "Signal : 🟢 Buy" in m),
-        "SELL": next(m for m in tg.delivered if "Signal : 🔴 Sell" in m),
-        "BULL_T": next(m for m in tg.delivered if "BTCUSDT.P" in m and "Time : 15 min" in m),
-        "BEAR_T": next(m for m in tg.delivered if "ETHUSDT.P" in m and "Time : 15 min" in m),
+    by_symbol = {
+        sym: next(m for m in tg.delivered if f"{sym}USDT.P" in m) for sym in ("BTC", "ETH", "SOL")
     }
     check(
-        "BUY alert: bold BTCUSDT.P, 5 min, green Buy, BullT, against-4H marker, no disclaimer",
-        [ln for ln in by_event["BUY"].splitlines() if not ln.startswith("Bar close : ")][:4]
-        == ["<b>BTCUSDT.P</b>", "Time : 5 min", "Signal : 🟢 Buy", "Trend : BullT"]
-        and re.search(r"\nBar close : \d\d:\d\d IST\n", by_event["BUY"]) is not None
-        and "Against the 4H trend" in by_event["BUY"]
-        and "financial advice" not in by_event["BUY"],
-        by_event["BUY"].replace("\n", " | "),
+        "Long alert: bold BTCUSDT.P, Long, 5 min Buy trigger, 1h confirm, bar close, 4H against",
+        [ln for ln in by_symbol["BTC"].splitlines() if not ln.startswith("Bar close : ")]
+        == [
+            "<b>BTCUSDT.P</b>",
+            "Setup : 🟢 Long",
+            "Trigger : 5 min Buy",
+            "1h confirm : BullT, 3 bars ago",
+            "4H trend : ✗ Against",
+        ]
+        and re.search(r"\nBar close : \d\d:\d\d IST\n", by_symbol["BTC"]) is not None
+        and "financial advice" not in by_symbol["BTC"],
+        by_symbol["BTC"].replace("\n", " | "),
     )
     check(
-        "SELL alert: red Sell + BearT; trend-only alerts show Signal : - and the trend",
-        by_event["SELL"].splitlines()[3:5] == ["Signal : 🔴 Sell", "Trend : BearT"]
-        and "Signal : —" in by_event["BULL_T"]
-        and "Trend : BullT" in by_event["BULL_T"]
-        and "Signal : —" in by_event["BEAR_T"]
-        and "Trend : BearT" in by_event["BEAR_T"],
+        "Short alert: red Short, 15 min Sell, 1h BearT, 4H With; unknown 4H shows a dash",
+        "Setup : 🔴 Short" in by_symbol["ETH"]
+        and "Trigger : 15 min Sell" in by_symbol["ETH"]
+        and "1h confirm : BearT, 3 bars ago" in by_symbol["ETH"]
+        and "4H trend : ✓ With" in by_symbol["ETH"]
+        and "4H trend : —" in by_symbol["SOL"],
+    )
+    check(
+        "4H trend is informational: an 'against' setup is sent like any other",
+        "✗ Against" in by_symbol["BTC"] and flags["BTC_USDT"],
     )
     check(
         "alerts are sent with parse_mode HTML (bold symbol) and contain no price or internal ids",
@@ -188,12 +199,12 @@ async def scenario_exactly_once(cfg: AppConfig) -> None:
     )
     again = await agent.execute(uuid.uuid4(), now + timedelta(seconds=30))
     check(
-        "second run sends nothing: each event exactly once",
-        again.result is not None and again.result.rows_out == 0 and len(tg.delivered) == 4,
+        "second run sends nothing: each setup exactly once",
+        again.result is not None and again.result.rows_out == 0 and len(tg.delivered) == 3,
     )
     check(
         "pacing: >= 1.1 s between consecutive messages",
-        tg.sleeps == [1.1] * 3,
+        tg.sleeps == [1.1] * 2,
         str(tg.sleeps),
     )
 
@@ -376,7 +387,7 @@ async def scenario_cap_and_config(cfg: AppConfig) -> None:
         and out.result.meta["reason"] == "telegram_not_configured",
     )
 
-    # Controller hook: the notifier runs after every successful signal run when Telegram is enabled
+    # Controller hook: the notifier runs after every successful signal + setup run when enabled
     class StubSignal(BaseAgent):
         name = "signal"
         critical = False
@@ -388,7 +399,16 @@ async def scenario_cap_and_config(cfg: AppConfig) -> None:
     c2 = sf.make_controller(cfg, sf.FakeFutures(), sf.FakeSpot())
     await add(c2, [event("H1_USDT", "5m", "BUY", datetime.now(UTC) - timedelta(minutes=1))])
     tg2 = FakeTelegram()
+
+    class StubSetup(BaseAgent):
+        name = "setup"
+        critical = False
+
+        async def run(self, cycle_id: uuid.UUID, now: datetime) -> AgentResult:
+            return AgentResult(status=SUCCESS)
+
     c2.agents["signal"] = StubSignal(c2.deps)
+    c2.agents["setup"] = StubSetup(c2.deps)
     c2.agents["notifier"] = agent_for(c2, tg2)
     c2.telegram_enabled = False
     await c2.signal_job()
@@ -483,7 +503,7 @@ async def scenario_cap_and_config(cfg: AppConfig) -> None:
                 )
             )
         ).scalar_one()
-        n_runs = (await s.execute(select(func.count()).select_from(SignalEvent))).scalar_one()
+        n_runs = (await s.execute(select(func.count()).select_from(SignalSetup))).scalar_one()
         _ = n_runs
     check("no token in any agent_runs row", leaked == 0, f"{leaked} rows")
 

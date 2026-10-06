@@ -13,14 +13,15 @@ from tss.db.repositories import discovery as discovery_repo
 async def live_symbols(
     session_factory: async_sessionmaker[AsyncSession], majors: Collection[str] = ()
 ) -> set[str]:
-    """Symbols the signal engine works on: the latest selection and the configured majors
-    (only those that are active contracts). Pinned symbols are NOT included by themselves."""
+    """Symbols the signal engine works on: the whole movers pool (not only the momentum
+    selection) and the configured majors (only those that are active contracts). Pinned symbols
+    are NOT included by themselves."""
     async with session_factory() as session:
         momentum = await discovery_repo.latest_momentum(session)
         active = await contracts_repo.active_contracts(session)
     active_symbols = {c.symbol for c in active}
-    selected = {r.symbol for r in momentum if r.selection_rank is not None}
-    return selected | (set(majors) & active_symbols)
+    pool = {r.symbol for r in momentum if not r.pinned}
+    return pool | (set(majors) & active_symbols)
 
 
 async def ticker_symbols(

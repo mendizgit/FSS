@@ -23,11 +23,12 @@ import asyncpg  # type: ignore[import-untyped]
 from sqlalchemy import func, select
 
 import simulate_failures as sf
+from tss.agents.setup import SetupAgent
 from tss.agents.signal import SignalAgent, floor_to
 from tss.clients.models import Kline
 from tss.core.errors import DataSourceError
 from tss.core.settings import AppConfig, load_config_or_exit
-from tss.db.models import MomentumRanking, Signal, SignalEvent
+from tss.db.models import MomentumRanking, Signal, SignalEvent, SignalSetup
 from tss.realtime.notify import asyncpg_dsn
 
 check = sf.check
@@ -369,6 +370,169 @@ async def scenario_retention(cfg: AppConfig) -> None:
     )
 
 
+async def scenario_pool(cfg: AppConfig) -> None:
+    print("\n4. Whole movers pool is evaluated (not only the selection)")
+    from tss.realtime.symbols import live_symbols
+
+    c = sf.make_controller(cfg, SynthFutures(), sf.FakeSpot())
+    await c.universe_job()
+    now = datetime.now(UTC)
+    cycle = uuid.uuid4()
+    async with c.deps.session_factory() as s:
+        for sym, pool_rank, sel, pinned in (
+            ("AAA_USDT", 1, 1, False),  # selected
+            ("BBB_USDT", 2, None, False),  # pool only: failed the RVOL / change gate
+            ("BTC_USDT", 3, None, True),  # pinned context row
+        ):
+            s.add(
+                MomentumRanking(
+                    cycle_id=cycle,
+                    symbol=sym,
+                    ts=now,
+                    pool_rank=pool_rank,
+                    passed_gate2=sel is not None,
+                    selection_rank=sel,
+                    pinned=pinned,
+                )
+            )
+        await s.commit()
+    got = await live_symbols(c.deps.session_factory, ["ETH_USDT"])
+    check_ = sf.check
+    check_(
+        "selected and pool-only symbols are both evaluated",
+        {"AAA_USDT", "BBB_USDT"} <= got,
+        str(got),
+    )
+    check_("pinned context row is not added on its own", "BTC_USDT" not in got, str(got))
+    check_("configured major (active contract) is kept", "ETH_USDT" in got, str(got))
+
+
+async def scenario_setups(cfg: AppConfig) -> None:
+    print("\n5. Setup tracker: baseline, new alerts, no repeats, flips")
+    c = sf.make_controller(cfg, SynthFutures(), sf.FakeSpot())
+    await c.universe_job()
+    now = datetime.now(UTC).replace(microsecond=0)
+    t0 = floor_to(now, timedelta(minutes=5))
+    cycle = uuid.uuid4()
+    async with c.deps.session_factory() as ses:
+        for rank, sym in enumerate(("AAA_USDT", "BBB_USDT"), start=1):
+            ses.add(
+                MomentumRanking(
+                    cycle_id=cycle,
+                    symbol=sym,
+                    ts=now,
+                    pool_rank=rank,
+                    passed_gate2=False,
+                    selection_rank=None,  # pool only: evaluated all the same
+                    pinned=False,
+                )
+            )
+        await ses.commit()
+
+    async def put(symbol: str, spec: dict[str, tuple[str, str, int | None]]) -> None:
+        async with c.deps.session_factory() as ses:
+            await ses.execute(Signal.__table__.delete().where(Signal.symbol == symbol))
+            for tf, (trend, last, ago) in spec.items():
+                ses.add(
+                    Signal(
+                        symbol=symbol,
+                        timeframe=tf,
+                        bar_close_time=t0,
+                        m_trend=trend,
+                        last_event=last,
+                        bars_ago=ago,
+                        against_htf=False,
+                        computed_at=now,
+                    )
+                )
+            await ses.commit()
+
+    long_spec = {
+        "5m": ("UP", "BULL_T", 1),
+        "15m": ("UP", "NONE", None),
+        "1h": ("UP", "BUY", 4),
+    }
+    short_spec = {
+        "5m": ("DOWN", "BEAR_T", 0),
+        "15m": ("DOWN", "NONE", None),
+        "1h": ("DOWN", "SELL", 2),
+    }
+    none_spec = {
+        "5m": ("DOWN", "NONE", None),
+        "15m": ("UP", "NONE", None),
+        "1h": ("UP", "NONE", None),
+    }
+    agent = SetupAgent(c.deps)
+
+    async def state() -> dict[str, SignalSetup]:
+        async with c.deps.session_factory() as ses:
+            return {r.symbol: r for r in (await ses.execute(select(SignalSetup))).scalars()}
+
+    await put("AAA_USDT", long_spec)
+    await put("BBB_USDT", none_spec)
+    out = await agent.execute(uuid.uuid4(), now)
+    st = await state()
+    check(
+        "first run is a baseline: the current Long is recorded as notified (no alert burst)",
+        out.status == "SUCCESS"
+        and set(st) == {"AAA_USDT"}
+        and st["AAA_USDT"].bias == "long"
+        and st["AAA_USDT"].notified_at is not None
+        and out.result is not None
+        and out.result.meta["baseline"] is True,
+        str(out.result and out.result.meta),
+    )
+    check(
+        "a pool-only symbol (no selection rank) is evaluated; the trigger is the 5m bullT",
+        st["AAA_USDT"].trigger_timeframe == "5m" and st["AAA_USDT"].trigger_event == "BULL_T",
+    )
+
+    await put("BBB_USDT", short_spec)
+    out = await agent.execute(uuid.uuid4(), now)
+    st = await state()
+    check(
+        "a new Short appears: stored unnotified (alert pending), the old Long is not re-alerted",
+        st["BBB_USDT"].bias == "short"
+        and st["BBB_USDT"].notified_at is None
+        and st["AAA_USDT"].notified_at is not None
+        and out.result is not None
+        and out.result.meta["new"] == 1,
+        str(out.result and out.result.meta),
+    )
+    out = await agent.execute(uuid.uuid4(), now)
+    check(
+        "same setups on the next run: nothing new",
+        out.result is not None and out.result.meta["new"] == 0,
+        str(out.result and out.result.meta),
+    )
+
+    await put("AAA_USDT", none_spec)
+    await agent.execute(uuid.uuid4(), now)
+    check("a setup that stops qualifying becomes inactive", not (await state())["AAA_USDT"].active)
+    await put("AAA_USDT", long_spec)
+    out = await agent.execute(uuid.uuid4(), now)
+    st = await state()
+    check(
+        "it comes back with the very same trigger event: reactivated, NOT alerted again",
+        st["AAA_USDT"].active
+        and st["AAA_USDT"].notified_at is not None
+        and out.result is not None
+        and out.result.meta["new"] == 0,
+        str(out.result and out.result.meta),
+    )
+    await put("AAA_USDT", short_spec)
+    out = await agent.execute(uuid.uuid4(), now)
+    st = await state()
+    check(
+        "Long flips to Short: a new alert is pending",
+        st["AAA_USDT"].bias == "short"
+        and st["AAA_USDT"].notified_at is None
+        and out.result is not None
+        and out.result.meta["new"] == 1,
+        str(out.result and out.result.meta),
+    )
+
+
 async def main() -> int:
     cfg = load_config_or_exit()
     base_url = cfg.settings.database_url.get_secret_value()
@@ -381,6 +545,10 @@ async def main() -> int:
         await scenario_failures(scfg)
         await sf.reset_sim_data(scfg)
         await scenario_retention(scfg)
+        await sf.reset_sim_data(scfg)
+        await scenario_pool(scfg)
+        await sf.reset_sim_data(scfg)
+        await scenario_setups(scfg)
     finally:
         for engine in sf.ENGINES:
             await engine.dispose()

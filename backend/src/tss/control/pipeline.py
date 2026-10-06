@@ -25,15 +25,16 @@ from tss.agents.movers import MoversAgent
 from tss.agents.news import NewsAgent
 from tss.agents.notifier import NotifierAgent
 from tss.agents.retention import RetentionAgent
+from tss.agents.setup import SetupAgent
 from tss.agents.signal import SignalAgent
 from tss.agents.snapshot import SnapshotAgent
 from tss.agents.universe import UniverseAgent
 from tss.clients.rss import RssClient
 from tss.clients.telegram import TelegramClient
 from tss.control.breaker import CircuitBreaker
-from tss.control.flags import news_on, telegram_on
+from tss.control.flags import RUN, news_on, telegram_on
 from tss.control.health import HealthInputs, evaluate
-from tss.control.schedule import in_quiet_hours
+from tss.control.schedule import PauseState, pause_state
 from tss.core.errors import DataSourceError, StorageError
 from tss.core.logging import get_logger
 from tss.core.time import utc_now
@@ -76,6 +77,7 @@ class Controller:
                 RetentionAgent(deps),
                 NewsAgent(deps, rss),
                 SignalAgent(deps),
+                SetupAgent(deps),
                 NotifierAgent(deps, telegram),
             )
         }
@@ -86,13 +88,42 @@ class Controller:
         self.telegram_enabled = telegram is not None
         self.halt_reason: str | None = None
         self.mexc_down = False
+        self._was_paused: bool | None = None
         self.degraded: set[str] = set()
         self._busy: set[str] = set()
         self.log = get_logger(COMPONENT)
 
-    def quiet_now(self) -> bool:
+    async def pause_state(self) -> PauseState:
+        """Daily pause plus the dashboard Pause / Start override (stored in control_flags)."""
         q = self.deps.config.thresholds.quiet_hours
-        return in_quiet_hours(self.clock(), q.pause_hour_ist, q.resume_hour_ist)
+        enabled: bool | None = None
+        at: datetime | None = None
+        try:
+            async with self.deps.session_factory() as session:
+                row = await ops.get_flag_row(session, RUN)
+                if row is not None:
+                    enabled, at = row.enabled, row.updated_at
+        except Exception as exc:
+            if is_db_unreachable(exc):
+                self.halt("database unreachable (control/pause_state)")
+        return pause_state(self.clock(), enabled, at, q.pause_hour_ist, q.resume_hour_ist)
+
+    async def pause_watch_job(self) -> None:
+        """Every 10 s: when the pause ends (Start pressed or 06:00), catch up immediately."""
+        state = await self.pause_state()
+        was_paused, self._was_paused = self._was_paused, state.paused
+        if was_paused is not True or state.paused:
+            return
+        self.log.info(
+            "resumed from pause",
+            component=COMPONENT,
+            phase=PHASE,
+            op="pause_watch",
+            reason=state.reason,
+        )
+        await self.refresh_state()
+        await self.snapshot_job()
+        await self.pipeline_job()  # also runs the signal job
 
     # --- failure policy ------------------------------------------------------------------
 
@@ -192,8 +223,8 @@ class Controller:
 
     async def _exclusive(self, job: str, coro_fn: Callable[[], object]) -> None:
         """max_instances=1: a job that is already running is skipped, never doubled."""
-        if job in PAUSABLE_JOBS and self.quiet_now():
-            return  # daily quiet hours: nothing runs, nothing is logged per tick
+        if job in PAUSABLE_JOBS and (await self.pause_state()).paused:
+            return  # daily pause or dashboard Pause: nothing runs, nothing is logged per tick
         if job in MEXC_JOBS and not await self._mexc_reachable():
             return  # paused until the connection returns (mexc_recovery_job resumes)
         if job in self._busy:
@@ -344,6 +375,9 @@ class Controller:
     async def signal_job(self) -> None:
         async def go() -> None:
             outcome = await self.run_agent(self.agents["signal"], uuid.uuid4(), self.clock())
+            if outcome is not None and outcome.status in (SUCCESS, PARTIAL):
+                # new Long / Short setups, then (below) their Telegram alerts
+                await self.run_agent(self.agents["setup"], uuid.uuid4(), self.clock())
             s = self.deps.config.settings
             if (
                 self.telegram_enabled
@@ -351,7 +385,7 @@ class Controller:
                 and outcome is not None
                 and outcome.status in (SUCCESS, PARTIAL)
             ):
-                # after every signal run (also retries events released by an earlier failure)
+                # after every signal run (also retries setups released by an earlier failure)
                 await self.run_agent(self.agents["notifier"], uuid.uuid4(), self.clock())
 
         await self._exclusive("signal", go)
