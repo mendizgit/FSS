@@ -64,6 +64,14 @@ class MexcFuturesClient:
         self._http = http
         self._base = base_url
 
+    async def ping(self) -> None:
+        """Reachability probe: one attempt, no retry. Raises DataSourceError when unreachable."""
+        path = "/api/v1/contract/ping"
+        body = await self._http.get_json(
+            self._base + path, component=COMPONENT, operation="ping", attempts=1
+        )
+        envelope_data(body, path, "ping")
+
     async def contract_detail(self) -> list[ContractDetail]:
         path = "/api/v1/contract/detail"
         body = await self._http.get_json(

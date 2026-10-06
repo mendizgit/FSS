@@ -12,6 +12,7 @@ WARMUP_WINDOW = timedelta(hours=4)  # the longest classification window needs 4 
 @dataclass
 class HealthInputs:
     halt_reason: str | None
+    mexc_down: bool = False
     open_breakers: list[str] = field(default_factory=list)
     degraded_agents: list[str] = field(default_factory=list)
     earliest_snapshot: datetime | None = None
@@ -19,9 +20,11 @@ class HealthInputs:
 
 
 def evaluate(h: HealthInputs) -> tuple[str, str | None]:
-    """Priority: HALTED > DEGRADED > WARMING_UP > RUNNING."""
+    """Priority: HALTED (halt or MEXC unreachable) > DEGRADED > WARMING_UP > RUNNING."""
     if h.halt_reason:
         return HALTED, h.halt_reason
+    if h.mexc_down:
+        return HALTED, "MEXC unreachable: paused until the connection returns"
     problems = [f"breaker open: {a}" for a in h.open_breakers] + [
         f"stale: {a}" for a in h.degraded_agents
     ]

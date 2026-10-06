@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from collections.abc import Callable
@@ -33,7 +34,7 @@ from tss.control.breaker import CircuitBreaker
 from tss.control.flags import news_on, telegram_on
 from tss.control.health import HealthInputs, evaluate
 from tss.control.schedule import in_quiet_hours
-from tss.core.errors import StorageError
+from tss.core.errors import DataSourceError, StorageError
 from tss.core.logging import get_logger
 from tss.core.time import utc_now
 from tss.db.repositories import market as market_repo
@@ -45,6 +46,10 @@ FUTURES_AGENTS = frozenset({"universe", "snapshot", "kline_sync"})
 FUTURES_SOURCE = "mexc_futures"
 # retention keeps its own schedule
 PAUSABLE_JOBS = frozenset({"universe", "snapshot", "movers", "pipeline", "signal", "news"})
+# jobs that need MEXC (directly, or because their input is a MEXC-fed cycle); news uses RSS
+MEXC_JOBS = frozenset({"universe", "snapshot", "movers", "pipeline", "signal"})
+PROBE_FAILURES = 2  # consecutive failed probes before the system pauses
+PROBE_GAP_S = 2.0
 
 
 class Controller:
@@ -80,6 +85,7 @@ class Controller:
         }
         self.telegram_enabled = telegram is not None
         self.halt_reason: str | None = None
+        self.mexc_down = False
         self.degraded: set[str] = set()
         self._busy: set[str] = set()
         self.log = get_logger(COMPONENT)
@@ -159,6 +165,7 @@ class Controller:
                 state, reason = evaluate(
                     HealthInputs(
                         halt_reason=self.halt_reason,
+                        mexc_down=self.mexc_down,
                         open_breakers=sorted(n for n, b in self.breakers.items() if b.is_open(now)),
                         degraded_agents=sorted(self.degraded),
                         earliest_snapshot=earliest,
@@ -187,6 +194,8 @@ class Controller:
         """max_instances=1: a job that is already running is skipped, never doubled."""
         if job in PAUSABLE_JOBS and self.quiet_now():
             return  # daily quiet hours: nothing runs, nothing is logged per tick
+        if job in MEXC_JOBS and not await self._mexc_reachable():
+            return  # paused until the connection returns (mexc_recovery_job resumes)
         if job in self._busy:
             self.log.warning("job still running; skipped", component=COMPONENT, phase=PHASE, op=job)
             return
@@ -196,6 +205,46 @@ class Controller:
         finally:
             self._busy.discard(job)
             await self.refresh_state()
+
+    async def _probe_mexc(self) -> bool:
+        try:
+            await self.deps.futures.ping()
+        except DataSourceError as exc:
+            self.log.warning(
+                "mexc probe failed",
+                component=COMPONENT,
+                phase=PHASE,
+                op="mexc_probe",
+                reason=exc.message,
+            )
+            return False
+        return True
+
+    async def _mexc_reachable(self) -> bool:
+        """Pre-run gate: PROBE_FAILURES failed probes in a row pause every MEXC job."""
+        if self.mexc_down:
+            return False
+        for attempt in range(PROBE_FAILURES):
+            if await self._probe_mexc():
+                return True
+            if attempt < PROBE_FAILURES - 1:
+                await asyncio.sleep(PROBE_GAP_S)
+        self.mexc_down = True
+        self.log.error(
+            "paused: MEXC unreachable", component=COMPONENT, phase=PHASE, op="mexc_probe"
+        )
+        await self.refresh_state()
+        return False
+
+    async def mexc_recovery_job(self) -> None:
+        """While paused by the probe: check every 15 s; on success resume and catch up."""
+        if not self.mexc_down or not await self._probe_mexc():
+            return
+        self.mexc_down = False
+        self.log.info("resumed: MEXC reachable", component=COMPONENT, phase=PHASE, op="mexc_probe")
+        await self.refresh_state()
+        await self.snapshot_job()
+        await self.pipeline_job()  # also runs the signal job
 
     async def universe_job(self) -> None:
         async def go() -> None:

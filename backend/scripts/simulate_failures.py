@@ -57,8 +57,15 @@ class FakeFutures:
 
     def __init__(self) -> None:
         self.fail = False
+        self.probe_down = False  # the reachability probe fails (connect timeout)
+        self.data_calls = 0  # data-endpoint calls, to prove a paused system sends none
+
+    async def ping(self) -> None:
+        if self.probe_down:
+            raise DataSourceError("mexc_futures", "P1", "ping", "simulated: ConnectTimeout")
 
     def _maybe_fail(self, op: str) -> None:
+        self.data_calls += 1
         if self.fail:
             raise DataSourceError("mexc_futures", "P1", op, "simulated: MEXC unreachable")
 
@@ -260,10 +267,43 @@ async def scenario_mexc_unreachable(cfg: AppConfig) -> None:
     check("state leaves HALTED", await state_of(c) != "HALTED", str(await state_of(c)))
 
 
+async def scenario_probe_pause(cfg: AppConfig) -> None:
+    print("\n1b. MEXC probe: pause while unreachable, resume + catch-up")
+    import tss.control.pipeline as pl
+
+    pl.PROBE_GAP_S = 0.0
+    fake = FakeFutures()
+    c = make_controller(cfg, fake, FakeSpot())
+    await c.universe_job()
+    await c.snapshot_job()
+    check("healthy: probe passes, not paused", not c.mexc_down)
+    fake.probe_down = True
+    calls = fake.data_calls
+    await c.snapshot_job()
+    check("2 failed probes pause the system", c.mexc_down)
+    check("paused: no data endpoint was called", fake.data_calls == calls)
+    check("paused: no breaker failure counted", c.breakers["snapshot"].consecutive_failures == 0)
+    check("state HALTED with a MEXC reason", await state_of(c) == "HALTED")
+    st = await api_status(cfg)
+    check("/api/status reports HALTED", st.get("state") == "HALTED", str(st.get("reason")))
+    await c.pipeline_job()
+    await c.signal_job()
+    check("paused: pipeline and signal also send nothing", fake.data_calls == calls)
+    await c.mexc_recovery_job()
+    check("still down: stays paused", c.mexc_down)
+    fake.probe_down = False
+    await c.mexc_recovery_job()
+    check("probe ok: resumed", not c.mexc_down)
+    check("resume ran the catch-up (data calls made)", fake.data_calls > calls)
+    check("state leaves HALTED", await state_of(c) != "HALTED", str(await state_of(c)))
+
+
 async def scenario_malformed(cfg: AppConfig) -> None:
     print("\n2. Malformed response")
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/contract/ping"):
+            return httpx.Response(200, json={"success": True, "code": 0, "data": 1})
         if request.url.path.endswith("/contract/detail"):
             bad = {
                 "success": True,
@@ -668,6 +708,8 @@ async def main() -> int:
     scfg = sim_config(cfg, sim_url)
     try:
         await scenario_mexc_unreachable(scfg)
+        await reset_sim_data(scfg)
+        await scenario_probe_pause(scfg)
         await reset_sim_data(scfg)
         await scenario_malformed(scfg)
         await scenario_http_retry()

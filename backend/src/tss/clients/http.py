@@ -84,8 +84,11 @@ class HttpClient:
         component: str,
         operation: str,
         params: dict[str, Any] | None = None,
+        attempts: int | None = None,
     ) -> Any:
-        resp = await self._request(url, component=component, operation=operation, params=params)
+        resp = await self._request(
+            url, component=component, operation=operation, params=params, attempts=attempts
+        )
         try:
             return resp.json()
         except ValueError as exc:  # invalid JSON body
@@ -126,13 +129,16 @@ class HttpClient:
         component: str,
         operation: str,
         params: dict[str, Any] | None,
+        attempts: int | None = None,
     ) -> httpx.Response:
+        """attempts=None: first try + len(BACKOFF_S) retries; attempts=1 (probes): no retry."""
+        max_attempts = attempts or len(BACKOFF_S) + 1
         parts = urlsplit(url)
         path = parts.path
         limiter = self._limiters.get(parts.netloc)
         last: str = "unknown error"
         status: int | None = None
-        for attempt in range(len(BACKOFF_S) + 1):
+        for attempt in range(max_attempts):
             if limiter is not None:
                 await limiter.acquire(self._sleep)
             delay: float | None = None
@@ -155,7 +161,7 @@ class HttpClient:
                 ) from exc
             except httpx.TransportError as exc:
                 last = type(exc).__name__
-            if attempt < len(BACKOFF_S):
+            if attempt < max_attempts - 1:
                 wait = delay if delay is not None else BACKOFF_S[attempt] + self._jitter()
                 self._log.warning(
                     "retrying",
@@ -172,6 +178,6 @@ class HttpClient:
             component,
             PHASE,
             operation,
-            f"{path} failed after {len(BACKOFF_S) + 1} attempts ({last})",
+            f"{path} failed after {max_attempts} attempts ({last})",
             {"endpoint": path, "status": status},
         )

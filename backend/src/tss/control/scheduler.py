@@ -85,4 +85,12 @@ def build_scheduler(controller: Controller) -> AsyncIOScheduler:
         misfire_grace_time=30,
         **common,
     )
+    scheduler.add_job(
+        controller.mexc_recovery_job,
+        "interval",
+        seconds=15,
+        id="mexc_recovery",
+        misfire_grace_time=10,
+        **common,
+    )
     return scheduler

@@ -17,6 +17,7 @@ from tss.db.repositories import market as market_repo
 from tss.domain.calculations import BAR, is_closed
 
 CONCURRENCY = 5  # the shared rate limiter still spaces the requests
+ABORT_AFTER_TRANSPORT_FAILURES = 5  # consecutive connect/timeout failures: stop sending requests
 
 
 class KlineSyncAgent(BaseAgent):
@@ -41,16 +42,25 @@ class KlineSyncAgent(BaseAgent):
         sem = asyncio.Semaphore(CONCURRENCY)
         fetched: dict[str, list[Kline]] = {}
         failed: dict[str, str] = {}
+        transport_streak = 0  # consecutive failures with no HTTP status (connect/timeout)
 
         async def fetch(symbol: str) -> None:
+            nonlocal transport_streak
             start = latest.get(symbol, backfill_from)  # re-fetch the newest stored bar (+1)
             async with sem:
+                if transport_streak >= ABORT_AFTER_TRANSPORT_FAILURES:
+                    failed[symbol] = "skipped: MEXC unreachable (consecutive connect failures)"
+                    return
                 try:
                     fetched[symbol] = await self.deps.futures.klines(
                         symbol, kcfg.interval, start, now
                     )
+                    transport_streak = 0
                 except DataSourceError as exc:
                     failed[symbol] = exc.message
+                    transport_streak = (
+                        transport_streak + 1 if exc.context.get("status") is None else 0
+                    )
 
         await asyncio.gather(*(fetch(s) for s in targets))
         if len(failed) == len(targets):

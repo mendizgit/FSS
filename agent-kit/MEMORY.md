@@ -1,6 +1,6 @@
 # MEMORY — TSS progress (single file · edit changed lines only · max 150 lines)
 
-updated: 2026-10-06 | commit: 95ca0f9 | phase: P5 | status: AWAITING_REVIEW
+updated: 2026-10-06 | commit: 1a7c7ce (+uncommitted MEXC probe pause) | phase: P5 | status: AWAITING_REVIEW
 
 ## Next step
 - Stack is running the latest code. Telegram PAUSED (resume with the header Telegram button; it overrides TELEGRAM_ALERTS=off in .env). Verify after 06:00 IST: quiet-hours resume, universe_resume cron, Zone column fills, alert volume (TD on 5m+15m). Open: TV parity exports (F9), coin-name news tagging, CryptoPanic, zero_fee cadence, Float vs numeric, preflight wording.
@@ -12,6 +12,7 @@ F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 
 - ALERT LATENCY: resolved 2026-10-06 (signal job runs right after each pipeline + every 5 min at +20 s; alert drops older than the freshness window). Observe live.
 
 ## Log (newest first · max 10 lines · delete oldest)
+- 2026-10-06 MEXC probe pause (branch feat/heikin-ashi, UNCOMMITTED, not in Docker): futures.ping() (/api/v1/contract/ping, 1 attempt), Controller._mexc_reachable gate (2 failed probes => mexc_down => universe/snapshot/movers/pipeline/signal skipped, news keeps running, system_state HALTED w/ MEXC reason, no migration), mexc_recovery_job every 15 s resumes + snapshot/pipeline/signal catch-up; kline_sync stops after 5 consecutive connect failures; simulate_failures 58/58 (scenario 1b), other sims + pytest 77 pass
 - 2026-10-06 HA signals (branch feat/heikin-ashi, UNCOMMITTED, not in Docker yet): indicators/heikin_ashi.py + agents/signal_ha.py wired in pipeline.py; old agents/signal.py kept for rollback; ruff/mypy clean, pytest 77, simulate_signals 25 + telegram 30 pass; TD alerts removed from Telegram (NOTIFY_EVENTS = BUY/SELL/BULL_T/BEAR_T)
 - 2026-10-06 zone_position restored (column+API+GUI, migration c5a2d7e91f08) committed b3c40ba; telegram TD/5m+15m/bar-close committed as 6d6feb4
 - 2026-10-06 signals cleanup: dropped 10 derived columns (migration b3e8f01c6d44) + API/GUI/SignalSnapshot; kept m_trend/last_event/bars_ago/against_htf/price_vs_vwap; sim_config disables quiet hours so sims are clock-independent; pytest 75, all sims pass
@@ -28,7 +29,6 @@ F0 DONE · F1 DONE · F2 DONE · F3 DONE · F4 DONE · F5 DONE · F6 DONE · F7 
 - 2026-10-05 P1 phase-end validation passed: ruff/mypy/pip-audit clean, pytest 29, simulate_failures 47/47, alembic check clean, preflight 27/0, web lint/type/build ok, secrets scan clean, Docker stack ran scheduled :05 and :15:20 ticks; zero_fee flag is volatile on MEXC (70..507 within the hour)
 - 2026-10-05 P1 built: clients(http/futures/spot), domain(5 mods, 29 unit checks), repos, agents(universe/snapshot/kline_sync/momentum/classification/movers/retention), control(breaker/health/pipeline/scheduler), API routes, scripts/simulate_failures.py (36 checks pass); live run natively + in Docker ok; BTC 1h metrics hand-verified vs raw MEXC
 - 2026-10-05 P0 phase-end validation passed: ruff/mypy/pip-audit clean, alembic fresh temp DB up/check/down/up ok, preflight 27/0 fail, web lint/type/build ok, secrets scan clean, stack healthy on :8088 w/ auth+headers; fixed 2 ValueError->ValidationError; pnpm audit (dev) 1 high: braces via eslint-config-next, no patch; pytest: no tests yet (none required until domain/)
-- 2026-10-05 full stack up (project tss): db/api/web healthy, worker up, proxy on <LAN_IP>:8088 (8080 taken by vidhive uvicorn); 401 w/o creds ok, db/api/web not reachable on LAN; docs+CHANGELOG updated for 8088; authenticated 200 + headers verified (hash reset by user request)
 
 ## Decisions & API quirks (one line each)
 - MEXC detail zero-fee fields flicker between calls (507, 507, 451 within a minute; our 6 h refresh once caught 70); badge is display-only
