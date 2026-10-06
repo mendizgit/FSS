@@ -25,7 +25,7 @@ from tss.agents.movers import MoversAgent
 from tss.agents.news import NewsAgent
 from tss.agents.notifier import NotifierAgent
 from tss.agents.retention import RetentionAgent
-from tss.agents.signal_ha import SignalAgentHA
+from tss.agents.signal import SignalAgent
 from tss.agents.snapshot import SnapshotAgent
 from tss.agents.universe import UniverseAgent
 from tss.clients.rss import RssClient
@@ -75,7 +75,7 @@ class Controller:
                 MoversAgent(deps),
                 RetentionAgent(deps),
                 NewsAgent(deps, rss),
-                SignalAgentHA(deps),
+                SignalAgent(deps),
                 NotifierAgent(deps, telegram),
             )
         }

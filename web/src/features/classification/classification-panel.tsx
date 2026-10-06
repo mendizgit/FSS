@@ -20,6 +20,7 @@ export function ClassificationPanel() {
   const [selected, setSelected] = useState<string | null>(null);
 
   const classification = useClassification(window);
+  const other = useClassification(window === "1h" ? "4h" : "1h");
   const discovery = useDiscovery();
   const status = useStatus();
 
@@ -27,9 +28,17 @@ export function ClassificationPanel() {
     () => [...(discovery.data?.pool ?? []), ...(discovery.data?.pinned ?? [])],
     [discovery.data],
   );
+  // symbols that are NEUTRAL in both windows are hidden; if the other window is not loaded, nothing is hidden
+  const neutralInOther = useMemo(
+    () => new Set((other.data?.rows ?? []).filter((r) => r.state === "NEUTRAL").map((r) => r.symbol)),
+    [other.data],
+  );
   const rows = useMemo(
-    () => buildViewRows(classification.data?.rows ?? [], discoveryRows),
-    [classification.data, discoveryRows],
+    () =>
+      buildViewRows(classification.data?.rows ?? [], discoveryRows).filter(
+        (r) => !(r.state === "NEUTRAL" && other.data !== undefined && neutralInOther.has(r.symbol)),
+      ),
+    [classification.data, discoveryRows, neutralInOther, other.data],
   );
   const selectedRow = rows.find((r) => r.symbol === selected) ?? null;
   const nextPipeline = status.data?.next_runs.pipeline ?? null;

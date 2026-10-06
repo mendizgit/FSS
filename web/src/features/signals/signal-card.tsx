@@ -9,7 +9,7 @@ import { TimeText } from "@/components/tss/time-text";
 import { cn } from "@/lib/utils";
 import type { SignalRow, SignalSymbol } from "@/types/api";
 
-import { EVENT_META, TF_MINUTES, ZONE_LABEL } from "./meta";
+import { EVENT_META, isFresh, TF_MINUTES, ZONE_LABEL, type Setup } from "./meta";
 
 const TONE = { up: "text-up", down: "text-down", muted: "text-muted-foreground" } as const;
 
@@ -45,6 +45,9 @@ function EventCell({ row }: { row: SignalRow }) {
         <span className="font-semibold">{meta.label}</span>
         {row.against_htf ? <X aria-label="against the 4H trend" className="size-3 text-warn" /> : null}
         <span className="num text-[11px] text-muted-foreground">{ago}</span>
+        {isFresh(row) ? (
+          <span className="rounded bg-accent px-1 text-[10px] font-medium text-accent-foreground">fresh</span>
+        ) : null}
       </span>
     </Tip>
   );
@@ -87,12 +90,29 @@ function Row({ row, now }: { row: SignalRow; now: number }) {
   );
 }
 
-export function SignalCard({ item, now }: { item: SignalSymbol; now: number }) {
+function SetupBadge({ setup }: { setup: Setup }) {
+  if (setup.bias === "neutral" || setup.trigger === null) return null;
+  const long = setup.bias === "long";
+  const htf = setup.againstHtf;
+  return (
+    <span className="flex items-center gap-1.5 text-[11px]">
+      <span className={cn("font-semibold", long ? "text-up" : "text-down")}>
+        {long ? "Long" : "Short"} · {setup.trigger.timeframe} + 1h
+      </span>
+      {htf === null ? null : (
+        <span className={htf ? "text-warn" : "text-muted-foreground"}>{htf ? "against 4H" : "with 4H"}</span>
+      )}
+    </span>
+  );
+}
+
+export function SignalCard({ item, now, setup }: { item: SignalSymbol; now: number; setup?: Setup }) {
   return (
     <article aria-label={`Signals for ${item.symbol}`} className="border-b border-border">
       <header className="flex items-center gap-3 px-3 pt-2 pb-1">
         <SymbolLabel symbol={item.symbol} context={item.pinned} hideQuote />
         <LivePrice symbol={item.symbol} fallback={null} className="text-xs text-muted-foreground" />
+        {setup ? <SetupBadge setup={setup} /> : null}
       </header>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[440px] border-collapse text-[12px]">

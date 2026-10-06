@@ -156,6 +156,12 @@ class NewsOut(BaseModel):
     items: list[NewsItemOut]
 
 
+class RecentEventOut(BaseModel):
+    event: str  # BUY | SELL | BULL_T | BEAR_T
+    bars_ago: int  # bars before this row's newest closed bar
+    against_htf: bool | None
+
+
 class SignalRowOut(BaseModel):
     timeframe: str
     bar_close_time: datetime
@@ -166,6 +172,7 @@ class SignalRowOut(BaseModel):
     zone_position: str | None
     price_vs_vwap: str | None
     computed_at: datetime
+    recent_events: list[RecentEventOut] = []  # BUY/SELL/BULL_T/BEAR_T, newest first
 
 
 class SignalSymbolOut(BaseModel):

@@ -145,6 +145,12 @@ export interface NewsResponse {
 
 export type SignalTimeframe = "5m" | "15m" | "1h";
 
+export interface RecentEvent {
+  event: string;
+  bars_ago: number;
+  against_htf: boolean | null;
+}
+
 export interface SignalRow {
   timeframe: SignalTimeframe;
   bar_close_time: string;
@@ -155,6 +161,7 @@ export interface SignalRow {
   zone_position: string | null;
   price_vs_vwap: string | null;
   computed_at: string;
+  recent_events: RecentEvent[];
 }
 
 export interface SignalSymbol {

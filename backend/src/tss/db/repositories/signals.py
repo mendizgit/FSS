@@ -77,6 +77,24 @@ async def latest_signals(session: AsyncSession, symbols: Collection[str]) -> lis
     return list(result.scalars())
 
 
+async def recent_events(
+    session: AsyncSession, symbols: Collection[str], events: Collection[str], since: datetime
+) -> list[SignalEvent]:
+    """Stored events of the given kinds with bar_close_time >= since (newest first)."""
+    if not symbols:
+        return []
+    result = await session.execute(
+        select(SignalEvent)
+        .where(
+            SignalEvent.symbol.in_(list(symbols)),
+            SignalEvent.event.in_(list(events)),
+            SignalEvent.bar_close_time >= since,
+        )
+        .order_by(SignalEvent.bar_close_time.desc())
+    )
+    return list(result.scalars())
+
+
 async def purge_older_than(session: AsyncSession, cutoff: datetime) -> dict[str, int]:
     signals = await session.execute(delete(Signal).where(Signal.computed_at < cutoff))
     events = await session.execute(delete(SignalEvent).where(SignalEvent.bar_close_time < cutoff))
