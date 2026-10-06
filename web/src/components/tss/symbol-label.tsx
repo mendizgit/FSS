@@ -1,6 +1,11 @@
 import { Badge } from "@/components/ui/badge";
 import { Tip } from "@/components/tss/tip";
 
+/** MEXC USDT perpetual on TradingView, e.g. BTC_USDT -> MEXC:BTCUSDT.P */
+function tradingViewUrl(symbol: string): string {
+  return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(`MEXC:${symbol.replace("_", "")}.P`)}`;
+}
+
 export function SymbolLabel({
   symbol,
   zeroFee,
@@ -15,7 +20,17 @@ export function SymbolLabel({
   const [base, quote] = symbol.split("_");
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-      <span className="font-semibold">{base}</span>
+      <Tip content="Open in TradingView (MEXC perp)">
+        <a
+          href={tradingViewUrl(symbol)}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="rounded-sm font-semibold hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          {base}
+        </a>
+      </Tip>
       {hideQuote ? null : <span className="text-[11px] text-muted-foreground">{quote ?? ""}</span>}
       {context ? (
         <Badge variant="outline" className="h-4 px-1.5 text-[10px] text-muted-foreground">
