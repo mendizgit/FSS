@@ -207,12 +207,13 @@ function AgentChip({ spec, status }: { spec: ChipSpec; status: StatusResponse | 
   );
 }
 
-export function StatusBar({ actions }: { actions?: ReactNode }) {
+export function StatusBar({ actions, leading }: { actions?: ReactNode; leading?: ReactNode }) {
   const query = useStatus();
   const status = query.data;
   return (
     <header className="shrink-0 border-b border-border bg-card px-3 py-2">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {leading}
         <h1 className="text-sm font-semibold tracking-tight">Trading Signal System</h1>
         <SystemState status={status} error={query.isError} />
         {status ? (

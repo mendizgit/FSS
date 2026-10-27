@@ -7,14 +7,14 @@ def utc(h: int, m: int = 0) -> datetime:
     return datetime(2026, 10, 5, h, m, tzinfo=UTC)
 
 
-def test_quiet_window_is_midnight_to_six_ist() -> None:
-    # 00:00 IST = 18:30 UTC, 06:00 IST = 00:30 UTC
-    assert not in_quiet_hours(utc(18, 29), 0, 6)
-    assert in_quiet_hours(utc(18, 30), 0, 6)
-    assert in_quiet_hours(utc(22), 0, 6)
-    assert in_quiet_hours(utc(0, 29), 0, 6)
-    assert not in_quiet_hours(utc(0, 30), 0, 6)
-    assert not in_quiet_hours(utc(12), 0, 6)
+def test_quiet_window_is_midnight_to_five_ist() -> None:
+    # 00:00 IST = 18:30 UTC, 05:00 IST = 23:30 UTC
+    assert not in_quiet_hours(utc(18, 29), 0, 5)
+    assert in_quiet_hours(utc(18, 30), 0, 5)
+    assert in_quiet_hours(utc(22), 0, 5)
+    assert in_quiet_hours(utc(23, 29), 0, 5)
+    assert not in_quiet_hours(utc(23, 30), 0, 5)
+    assert not in_quiet_hours(utc(12), 0, 5)
 
 
 def test_window_wrapping_midnight_and_empty_window() -> None:
@@ -31,7 +31,7 @@ def ist(day: int, hour: int, minute: int = 0) -> datetime:
 
 
 def ps(now: datetime, enabled: bool | None = None, at: datetime | None = None) -> PauseState:
-    return pause_state(now, enabled, at, 0, 6)
+    return pause_state(now, enabled, at, 0, 5)
 
 
 def test_no_override_follows_daily_pause() -> None:
@@ -39,18 +39,18 @@ def test_no_override_follows_daily_pause() -> None:
     assert not ps(ist(7, 12)).paused
 
 
-def test_manual_pause_lasts_until_next_0600() -> None:
+def test_manual_pause_lasts_until_next_0500() -> None:
     at = ist(7, 14)
     assert ps(ist(7, 20), False, at).paused
-    assert ps(ist(8, 5, 59), False, at).paused
-    assert ps(ist(8, 5, 59), False, at).until == ist(8, 6)
-    assert not ps(ist(8, 6), False, at).paused  # back to the daily schedule: running
+    assert ps(ist(8, 4, 59), False, at).paused
+    assert ps(ist(8, 4, 59), False, at).until == ist(8, 5)
+    assert not ps(ist(8, 5), False, at).paused  # back to the daily schedule: running
 
 
-def test_pause_inside_daily_window_resumes_at_0600() -> None:
+def test_pause_inside_daily_window_resumes_at_0500() -> None:
     at = ist(7, 2)
-    assert ps(ist(7, 5, 59), False, at).paused
-    assert not ps(ist(7, 6), False, at).paused
+    assert ps(ist(7, 4, 59), False, at).paused
+    assert not ps(ist(7, 5), False, at).paused
 
 
 def test_start_inside_daily_pause_runs_until_next_midnight() -> None:

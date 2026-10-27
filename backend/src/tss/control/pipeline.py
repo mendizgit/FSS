@@ -32,7 +32,7 @@ from tss.agents.universe import UniverseAgent
 from tss.clients.rss import RssClient
 from tss.clients.telegram import TelegramClient
 from tss.control.breaker import CircuitBreaker
-from tss.control.flags import RUN, news_on, telegram_on
+from tss.control.flags import RESTART, RUN, news_on, telegram_on
 from tss.control.health import HealthInputs, evaluate
 from tss.control.schedule import PauseState, pause_state
 from tss.core.errors import DataSourceError, StorageError
@@ -89,6 +89,7 @@ class Controller:
         self.halt_reason: str | None = None
         self.mexc_down = False
         self._was_paused: bool | None = None
+        self._restart_handled = clock()  # requests older than this process are already served
         self.degraded: set[str] = set()
         self._busy: set[str] = set()
         self.log = get_logger(COMPONENT)
@@ -124,6 +125,35 @@ class Controller:
         await self.refresh_state()
         await self.snapshot_job()
         await self.pipeline_job()  # also runs the signal job
+
+    async def restart_watch_job(self) -> None:
+        """Every 5 s: serve a dashboard restart request (control_flags 'restart')."""
+        try:
+            async with self.deps.session_factory() as session:
+                row = await ops.get_flag_row(session, RESTART)
+        except Exception as exc:
+            if is_db_unreachable(exc):
+                self.halt("database unreachable (control/restart_watch)")
+            return
+        if row is None or row.updated_at <= self._restart_handled:
+            return
+        self._restart_handled = row.updated_at
+        self.log.info(
+            "restart requested from dashboard", component=COMPONENT, phase=PHASE, op="restart"
+        )
+        self.halt_reason = None
+        self.mexc_down = False
+        self.degraded.clear()
+        self._was_paused = None
+        ccfg = self.deps.config.thresholds.control
+        self.breakers = {
+            name: CircuitBreaker(ccfg.breaker_failures, ccfg.breaker_cooldown_s)
+            for name in (*self.agents, FUTURES_SOURCE)
+        }
+        await self.refresh_state()
+        state = await self.pause_state()
+        if not state.paused:
+            await self.startup()
 
     # --- failure policy ------------------------------------------------------------------
 

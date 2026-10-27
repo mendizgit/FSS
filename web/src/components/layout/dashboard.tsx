@@ -1,6 +1,6 @@
 "use client";
 
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, RotateCw } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { ClassificationPanel } from "@/features/classification/classification-pa
 import { MoversPanel } from "@/features/movers/movers-panel";
 import { NewsPanel } from "@/features/news/news-panel";
 import { SignalsPanel } from "@/features/signals/signals-panel";
-import { useSetFlag, useSetRun, useStatus } from "@/hooks/use-queries";
+import { useRestart, useSetFlag, useSetRun, useStatus } from "@/hooks/use-queries";
 import { StatusBar } from "@/features/status-bar/status-bar";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +55,7 @@ export function Dashboard() {
   const status = useStatus().data;
   const setFlag = useSetFlag();
   const setRun = useSetRun();
+  const restart = useRestart();
   const flags = status?.flags;
   const flagButton = (key: "news" | "telegram", label: string, on: boolean, disabled: boolean) => (
     <Button
@@ -83,6 +84,20 @@ export function Dashboard() {
         Skip to content
       </a>
       <StatusBar
+        leading={
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={restart.isPending}
+            onClick={() => {
+              if (window.confirm("Restart the system? Breakers and halt state are reset and the startup sequence runs again.")) restart.mutate();
+            }}
+            title="Full system restart: resets breakers, halt and degraded state, then re-runs universe, snapshot and pipeline."
+          >
+            <RotateCw aria-hidden className={restart.isPending ? "animate-spin" : undefined} />
+            Restart
+          </Button>
+        }
         actions={
           <>
           {status ? (
@@ -95,8 +110,8 @@ export function Dashboard() {
                 status.pause.paused
                   ? `${status.pause.reason ?? "Paused"}. Click to start now: it runs until 00:00 IST.`
                   : status.pause.manual
-                    ? `${status.pause.reason ?? "Running"}. Click to pause until 06:00 IST.`
-                    : "Running. Click to pause until 06:00 IST (it also pauses automatically at 00:00 IST)."
+                    ? `${status.pause.reason ?? "Running"}. Click to pause until 05:00 IST.`
+                    : "Running. Click to pause until 05:00 IST (it also pauses automatically at 00:00 IST)."
               }
             >
               <span aria-hidden className={cn("size-2 rounded-full", status.pause.paused ? "bg-muted-foreground" : "bg-up")} />

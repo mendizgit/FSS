@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tss.api.deps import get_config, get_session
 from tss.api.schemas.models import PauseOut
-from tss.control.flags import RUN, news_on, telegram_on
+from tss.control.flags import RESTART, RUN, news_on, telegram_on
 from tss.control.schedule import pause_state
 from tss.core.settings import AppConfig
 from tss.core.time import utc_now
@@ -62,7 +62,7 @@ async def set_run(
     session: Annotated[AsyncSession, Depends(get_session)],
     cfg: Annotated[AppConfig, Depends(get_config)],
 ) -> PauseOut:
-    """Dashboard Pause / Start. Pause holds until the next resume hour (06:00 IST) or Start;
+    """Dashboard Pause / Start. Pause holds until the next resume hour (05:00 IST) or Start;
     Start holds until the next pause hour (00:00 IST) or Pause. See control/schedule.pause_state."""
     now = utc_now()
     await ops.set_flag(session, RUN, body.enabled, now)
@@ -72,3 +72,20 @@ async def set_run(
     return PauseOut(
         paused=state.paused, manual=state.manual, reason=state.reason, until=state.until
     )
+
+
+class RestartOut(BaseModel):
+    requested_at: str
+
+
+@router.post("/control/restart", response_model=RestartOut)
+async def restart_system(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> RestartOut:
+    """Dashboard full-system restart: records the request; the worker (polling every 5 s) resets
+    its in-memory state (breakers, halt, degraded, MEXC probe state) and re-runs the startup
+    sequence. No container is restarted."""
+    now = utc_now()
+    await ops.set_flag(session, RESTART, True, now)
+    await session.commit()
+    return RestartOut(requested_at=now.isoformat())

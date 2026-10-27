@@ -36,6 +36,6 @@ control:
   breaker_cooldown_s: 900
 quiet_hours:                        # daily pause of snapshot/pipeline/signal/news jobs, IST wall clock
   pause_hour_ist: 0                 # 00:00 IST = 18:30 UTC
-  resume_hour_ist: 6                # 06:00 IST = 00:30 UTC
+  resume_hour_ist: 5                # 05:00 IST = 23:30 UTC
 mexc:
   max_requests_per_second: 5        # † conservative; adjust after preflight

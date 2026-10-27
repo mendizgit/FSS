@@ -79,6 +79,14 @@ export function useSetFlag() {
   });
 }
 
+export function useRestart() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost<{ requested_at: string }>("/control/restart", {}),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["status"] }),
+  });
+}
+
 export function useSetRun() {
   const client = useQueryClient();
   return useMutation({
