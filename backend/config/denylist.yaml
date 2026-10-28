@@ -1,2 +1,13 @@
-# Optional manual denylist. Empty by default: nothing is excluded by asset type.
-symbols: []
+# Manual denylist: contracts excluded from the whole system (pool, signals, alerts, paper trades).
+# Crypto coins only: no contracts backed by the stock, index, commodity or FX markets (user, 2026-10-28).
+symbols:                            # commodity / index / gold contracts
+  - COPPER_USDT
+  - NAS100_USDT
+  - SILVER_USDT
+  - SPX500_USDT
+  - UKOIL_USDT
+  - USOIL_USDT
+  - XAU_USDT
+  - XAUT_USDT
+suffixes:                           # tokenized stocks (AAPLSTOCK_USDT, ...)
+  - STOCK_USDT

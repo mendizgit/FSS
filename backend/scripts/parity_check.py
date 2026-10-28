@@ -41,8 +41,8 @@ EVENT_COLUMNS: dict[str, list[str]] = {
     "SELL": ["SELL", "SELL (against 4H)"],
     "TD bull": ["TD bull"],
     "TD bear": ["TD bear"],
-    "r": ["r (setup 1)", "r (setup 2)"],
-    "s": ["s (setup 1)", "s (setup 2)"],
+    "r": ["r (setup 1)"],
+    "s": ["s (setup 1)"],
 }
 
 

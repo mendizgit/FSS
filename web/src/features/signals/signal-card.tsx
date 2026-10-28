@@ -95,8 +95,11 @@ function SetupBadge({ setup }: { setup: SignalSetup }) {
   const htf = setup.against_htf;
   return (
     <span className="flex items-center gap-1.5 text-[11px]">
-      <span className={cn("font-semibold", long ? "text-up" : "text-down")}>
-        {long ? "Long" : "Short"} · {setup.trigger_timeframe} + 1h
+      <span
+        className={cn("font-semibold", long ? "text-up" : "text-down")}
+        title={`Entry on the last closed ${setup.trigger_timeframe} bar: SAR and 5m StochRSI agree, score ${setup.score}/5 (${setup.factors.split(",").filter(Boolean).join(", ") || "none"})`}
+      >
+        {long ? "Long" : "Short"} · {setup.trigger_timeframe} · {setup.score}/5
       </span>
       {htf === null ? null : (
         <span className={htf ? "text-warn" : "text-muted-foreground"}>{htf ? "against 4H" : "with 4H"}</span>

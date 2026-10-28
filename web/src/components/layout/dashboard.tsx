@@ -1,6 +1,6 @@
 "use client";
 
-import { PanelRightClose, PanelRightOpen, RotateCw } from "lucide-react";
+import { FlaskConical, PanelRightClose, PanelRightOpen, RotateCw } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ClassificationPanel } from "@/features/classification/classification-panel";
 import { MoversPanel } from "@/features/movers/movers-panel";
+import { PaperPanel } from "@/features/paper/paper-panel";
 import { NewsPanel } from "@/features/news/news-panel";
 import { SignalsPanel } from "@/features/signals/signals-panel";
 import { useRestart, useSetFlag, useSetRun, useStatus } from "@/hooks/use-queries";
@@ -39,6 +40,7 @@ type MobileTab = "classification" | "market" | "news";
 /** Regions per Arch §11: >=1280 three columns; 768-1279 left + middle, news below; <768 tabs. */
 export function Dashboard() {
   const [tab, setTab] = useState<MobileTab>("classification");
+  const [paperOpen, setPaperOpen] = useState(false);
   const newsOpen = useSyncExternalStore(subscribeNews, readNewsOpen, () => true);
   const toggleNews = () => {
     const next = !newsOpen;
@@ -121,6 +123,16 @@ export function Dashboard() {
           {flags ? flagButton("news", "News feed", flags.news, false) : null}
           {flags ? flagButton("telegram", "Telegram", flags.telegram, !status?.telegram_configured) : null}
           <Button
+            variant={paperOpen ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setPaperOpen((v) => !v)}
+            aria-pressed={paperOpen}
+            title="Dummy-money test of the 15m entry alerts"
+          >
+            <FlaskConical aria-hidden />
+            Paper
+          </Button>
+          <Button
             variant="ghost"
             size="sm"
             className="max-md:hidden"
@@ -141,6 +153,11 @@ export function Dashboard() {
           <TabsTrigger value="news">News</TabsTrigger>
         </TabsList>
       </Tabs>
+      {paperOpen ? (
+        <main id="main" className="flex min-h-0 min-w-0 flex-1 flex-col p-2 md:p-3">
+          <PaperPanel />
+        </main>
+      ) : (
       <main
         id="main"
         className={cn(
@@ -162,6 +179,7 @@ export function Dashboard() {
           <NewsPanel />
         </div>
       </main>
+      )}
     </div>
   );
 }

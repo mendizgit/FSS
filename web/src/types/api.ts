@@ -167,13 +167,11 @@ export interface SignalRow {
 
 export interface SignalSetup {
   bias: "long" | "short";
-  trigger_timeframe: "5m" | "15m";
-  trigger_event: string;
-  trigger_bars_ago: number;
-  against_htf: boolean | null;
-  minutes_ago: number;
-  htf_event: string;
-  htf_bars_ago: number;
+  trigger_timeframe: "15m";
+  score: number; // factors met out of 5
+  factors: string; // e.g. "ST,1H,EMA"
+  against_htf: boolean | null; // vs the 4H SuperTrend, informational
+  minutes_ago: number; // minutes since the 15m bar closed
 }
 
 export interface SignalSymbol {
@@ -188,4 +186,68 @@ export interface SignalSymbol {
 export interface SignalsResponse {
   updated_at: string | null;
   symbols: SignalSymbol[];
+}
+
+export interface PaperTrade {
+  id: number;
+  symbol: string;
+  side: "long" | "short";
+  status: "open" | "closed";
+  opened_at: string;
+  entry_price: number;
+  stop_price: number;
+  target_price: number;
+  score: number | null;
+  factors: string | null;
+  against_htf: boolean | null;
+  flip_events: string | null;
+  flip_confirms: boolean;
+  mfe_pct: number | null;
+  mae_pct: number | null;
+  last_price: number | null;
+  unrealized_usdt: number | null;
+  closed_at: string | null;
+  exit_price: number | null;
+  exit_reason: string | null;
+  pnl_usdt: number | null;
+  r_multiple: number | null;
+}
+
+export interface PaperGroup {
+  key: string;
+  trades: number;
+  wins: number;
+  pnl_usdt: number;
+  avg_r: number;
+}
+
+export interface PaperSummary {
+  start_balance_usdt: number;
+  balance_usdt: number;
+  realized_usdt: number;
+  unrealized_usdt: number;
+  margin_in_use_usdt: number;
+  open_trades: number;
+  closed_trades: number;
+  wins: number;
+  win_rate_pct: number | null;
+  avg_r: number | null;
+  profit_factor: number | null;
+  max_drawdown_usdt: number;
+  leverage: number;
+  margin_per_trade_usdt: number;
+  stop_pct: number;
+  reward_risk: number;
+  timeout_minutes: number;
+}
+
+export interface PaperResponse {
+  summary: PaperSummary;
+  open: PaperTrade[];
+  closed: PaperTrade[];
+  by_score: PaperGroup[];
+  by_flip_confirm: PaperGroup[];
+  by_htf: PaperGroup[];
+  by_exit: PaperGroup[];
+  by_side: PaperGroup[];
 }

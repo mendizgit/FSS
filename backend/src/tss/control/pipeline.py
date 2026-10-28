@@ -19,11 +19,13 @@ from tss.agents.base import (
     is_db_unreachable,
 )
 from tss.agents.classification import ClassificationAgent
+from tss.agents.fgi_paper import FgiPaperAgent
 from tss.agents.kline_sync import KlineSyncAgent
 from tss.agents.momentum import MomentumAgent
 from tss.agents.movers import MoversAgent
 from tss.agents.news import NewsAgent
 from tss.agents.notifier import NotifierAgent
+from tss.agents.paper import PaperAgent
 from tss.agents.retention import RetentionAgent
 from tss.agents.setup import SetupAgent
 from tss.agents.signal import SignalAgent
@@ -46,9 +48,11 @@ PHASE = "P1"
 FUTURES_AGENTS = frozenset({"universe", "snapshot", "kline_sync"})
 FUTURES_SOURCE = "mexc_futures"
 # retention keeps its own schedule
-PAUSABLE_JOBS = frozenset({"universe", "snapshot", "movers", "pipeline", "signal", "news"})
+PAUSABLE_JOBS = frozenset(
+    {"universe", "snapshot", "movers", "pipeline", "signal", "fgi_paper", "news"}
+)
 # jobs that need MEXC (directly, or because their input is a MEXC-fed cycle); news uses RSS
-MEXC_JOBS = frozenset({"universe", "snapshot", "movers", "pipeline", "signal"})
+MEXC_JOBS = frozenset({"universe", "snapshot", "movers", "pipeline", "signal", "fgi_paper"})
 PROBE_FAILURES = 2  # consecutive failed probes before the system pauses
 PROBE_GAP_S = 2.0
 
@@ -78,6 +82,8 @@ class Controller:
                 NewsAgent(deps, rss),
                 SignalAgent(deps),
                 SetupAgent(deps),
+                PaperAgent(deps),
+                FgiPaperAgent(deps),
                 NotifierAgent(deps, telegram),
             )
         }
@@ -408,6 +414,8 @@ class Controller:
             if outcome is not None and outcome.status in (SUCCESS, PARTIAL):
                 # new Long / Short setups, then (below) their Telegram alerts
                 await self.run_agent(self.agents["setup"], uuid.uuid4(), self.clock())
+                # dummy-money trades on those entries (before the notifier claims them)
+                await self.run_agent(self.agents["paper"], uuid.uuid4(), self.clock())
             s = self.deps.config.settings
             if (
                 self.telegram_enabled
@@ -428,6 +436,12 @@ class Controller:
             if is_db_unreachable(exc):
                 self.halt("database unreachable (control/flags)")
             return {}
+
+    async def fgi_paper_job(self) -> None:
+        async def go() -> None:
+            await self.run_agent(self.agents["fgi_paper"], uuid.uuid4(), self.clock())
+
+        await self._exclusive("fgi_paper", go)
 
     async def news_job(self) -> None:
         async def go() -> None:

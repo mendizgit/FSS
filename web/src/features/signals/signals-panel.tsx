@@ -87,7 +87,7 @@ export function SignalsPanel() {
                   now={now}
                   empty={
                     <PanelEmpty
-                      title="No long setups right now"
+                      title="No long entries right now"
                       hint={
                         <>
                           Needs a fresh BUY/bullT on 5m (0-5 bars) or 15m (0-2 bars) and a bullish 1h event within 10
@@ -104,7 +104,7 @@ export function SignalsPanel() {
                   now={now}
                   empty={
                     <PanelEmpty
-                      title="No short setups right now"
+                      title="No short entries right now"
                       hint={
                         <>
                           Needs a fresh SELL/bearT on 5m (0-5 bars) or 15m (0-2 bars) and a bearish 1h event within 10

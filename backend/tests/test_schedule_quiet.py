@@ -70,3 +70,9 @@ def test_start_outside_daily_window_changes_nothing() -> None:
 def test_new_choice_replaces_old() -> None:
     # paused at 14:00, started at 15:00 (override now = start), runs; at 00:00 it auto-pauses
     assert not ps(ist(7, 16), True, ist(7, 15)).paused
+
+
+def test_equal_hours_means_no_daily_pause() -> None:
+    for hour in range(24):
+        assert not in_quiet_hours(utc(hour), 0, 0)
+    assert not pause_state(utc(20), None, None, 0, 0).paused

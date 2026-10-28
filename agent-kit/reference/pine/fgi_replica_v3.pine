@@ -4,14 +4,19 @@
 //   run with "Average Filter Changes" on - this is the exact configuration FGI COM uses.
 // RSI divergence engine: port (RSI only) of "Divergence for Many Indicators v4"
 //   by LonesomeTheBlue (Mozilla Public License 2.0, https://mozilla.org/MPL/2.0/)
-// Dashboard / confluence grade / 4H trend / EMAs / levels / consolidated trend + TD: context layer
-//   taken from FGI Pro Strategy v3.0.
+// Context layer (EMAs, levels, consolidated trend + TD, 4H / 1H SuperTrend, dashboard) is taken from
+//   FGI Pro Strategy v3.0.
+//
+// Entry signal (dashboard only, 5m and 15m, evaluated on the last CLOSED bar of each):
+//   mandatory: local SuperTrend agrees, SAR agrees, StochRSI K vs D agrees
+//              (5m signal: 3m StochRSI; 15m signal: last closed 5m StochRSI)
+//   score of at least N out of 6: local SuperTrend, COM M trend on 1H, price vs EMA 1,
+//              TD within the last bars, RSI divergence, sweep & engulf
 //
 // Colours, line widths and on/off switches for everything that is a plot (R, S, M, EMAs, VWAP,
-// bullT / bearT / BUY / SELL / TD, s / r letters, fills) live in the STYLE tab. Inputs hold values
-// only. Objects Pine cannot style (right-hand S/M/R labels, daily / weekly level lines, divergence
-// lines, latest-only bullT / bearT labels, the dashboard) and the consolidated trend line (one
-// plot whose colour changes with the trend, exactly like Pro) keep colour inputs.
+// consolidated trend, bullT / bearT / BUY / SELL / TD, s / r letters, fills) live in the STYLE tab.
+// Inputs hold values only. Only objects Pine cannot style keep colour inputs (right-hand S/M/R
+// labels, daily / weekly level lines, divergence lines, latest-only bullT / bearT labels, the dashboard).
 indicator("FGI Replica V3", overlay = true, max_lines_count = 200, max_labels_count = 200, max_bars_back = 500)
 
 // ══ Inputs: S / M / R range filter ════════════════════════════════════════
@@ -68,26 +73,21 @@ zoneMainIn  = input.float(0.667, "Main zone: inner edge (x outer half-width)", m
 zoneMainOut = input.float(1.4, "Main zone: outer edge (x outer half-width)", minval = 0.0, step = 0.01, group = grpZn)
 
 // ══ Inputs: EMAs ══════════════════════════════════════════════════════════
-// Three EMAs (from FGI Pro Strategy). Lengths here, colours / widths / visibility in the Style tab.
-// EMA 3 doubles as the "dynamic S/R" reference of the confluence grade. EMA 1 / EMA 2 also drive
-// the consolidated trend below.
+// EMA 1 and EMA 2 drive TD and the consolidated trend; EMA 1 is also the entry-zone factor of the
+// score (price above / below EMA 1). EMA 3 is only a plotted line. Colours / widths / on-off: Style tab.
 grpEma = "EMAs"
-ema1Len = input.int(9, "EMA 1 length (fast)", minval = 1, group = grpEma)
-ema2Len = input.int(21, "EMA 2 length (slow)", minval = 1, group = grpEma)
-ema3Len = input.int(32, "EMA 3 length (dynamic S/R)", minval = 1, group = grpEma)
+ema1Len = input.int(6, "EMA 1 length (fast)", minval = 1, group = grpEma)
+ema2Len = input.int(24, "EMA 2 length (slow)", minval = 1, group = grpEma)
+ema3Len = input.int(32, "EMA 3 length (line only)", minval = 1, group = grpEma)
 emaSrc  = input.source(close, "EMA source", group = grpEma)
 
 // ══ Inputs: consolidated trend + TD ═══════════════════════════════════════
-// Copied from FGI Pro Strategy v3.0: ONE line, EMA(close, average of EMA 1 and EMA 2 lengths),
-// coloured by the confirmed EMA 1 / EMA 2 order. Because the colour changes along the line it is a
-// single plot with a calculated colour, so its colours are inputs here (Style cannot hold them).
+// From FGI Pro Strategy v3.0: EMA(close, average of EMA 1 and EMA 2 lengths), coloured by the
+// confirmed EMA 1 / EMA 2 order. Drawn as three plots (bullish / bearish / unconfirmed), so the
+// colours and width are in the Style tab.
 // "TD" prints where the EMA cross or the local SuperTrend flips while both agree.
 grpCt = "Consolidated Trend + TD"
 showCT       = input.bool(true, "Show consolidated trend line", group = grpCt)
-ctBullCol    = input.color(#00E5FF, "Bullish trend colour", group = grpCt)
-ctBearCol    = input.color(#E040FB, "Bearish trend colour", group = grpCt)
-ctNeutralCol = input.color(#FF530D, "Unconfirmed trend colour", group = grpCt)
-ctWidth      = input.int(3, "Line width", minval = 1, maxval = 5, group = grpCt)
 showTD       = input.bool(true, "Show TD labels (colours in Style)", group = grpCt)
 
 // ══ Inputs: daily / weekly levels ═════════════════════════════════════════
@@ -106,29 +106,18 @@ weekHLCol      = input.color(#29B6F6, "Week high / low colour", group = grpLv)
 weekHLWidth    = input.int(2, "Week line width", minval = 1, maxval = 4, group = grpLv)
 lvlExt         = input.int(20, "Lines extend this many bars to the right", minval = 1, maxval = 200, group = grpLv)
 
-// ══ Inputs: higher-timeframe trend + confluence grade ═════════════════════
-// 4H trend = SuperTrend on the higher timeframe (request.security: it can still change while the
-// higher-timeframe bar is forming). The grade is FGI Pro Strategy's 6-factor confluence score
-// (HTF trend, local SuperTrend, MTF RSI, entry zone, RSI divergence, sweep & engulf).
-grpHt = "4H Trend + Confluence Grade"
+// ══ Inputs: SuperTrend (local + information rows) ═════════════════════════
+// The 4H SuperTrend is information only (dashboard row).
+// The same multiplier / ATR length is used by the local SuperTrend and the 1H information row.
+grpHt = "SuperTrend (4H info, local)"
 htfTF    = input.timeframe("240", "Higher-timeframe trend: timeframe", group = grpHt)
-stMult   = input.float(3.0, "SuperTrend multiplier", minval = 0.1, step = 0.1, group = grpHt)
-stLen    = input.int(10, "SuperTrend ATR length", minval = 1, group = grpHt)
-tagHtf   = input.bool(true, "Tag signals that go against the higher-timeframe trend (✗)", group = grpHt)
-gTf1     = input.timeframe("60", "Grade RSI timeframe 1", group = grpHt)
-gTf2     = input.timeframe("240", "Grade RSI timeframe 2", group = grpHt)
-gRsiLen  = input.int(14, "Grade RSI length", minval = 2, group = grpHt)
-gRsiLong = input.float(45.0, "Grade RSI factor: long needs both RSIs above", group = grpHt)
-gRsiShort = input.float(55.0, "Grade RSI factor: short needs both RSIs below", group = grpHt)
-gBbLen   = input.int(20, "Grade entry zone: Bollinger length", minval = 2, group = grpHt)
-gBbDev   = input.float(2.0, "Grade entry zone: Bollinger deviation", minval = 0.1, step = 0.1, group = grpHt)
-gSwLen   = input.int(7, "Grade entry zone: swing lookback", minval = 1, group = grpHt)
-gAtrLen  = input.int(14, "Grade ATR length", minval = 1, group = grpHt)
-gSrBuf   = input.float(0.8, "Grade entry zone: S/R buffer (x ATR)", minval = 0.0, step = 0.1, group = grpHt)
-gEmaNear = input.float(0.6, "Grade entry zone: near EMA 3 within (x ATR)", minval = 0.0, step = 0.1, group = grpHt)
-gDivLen  = input.int(3, "Grade divergence pivot length", minval = 1, group = grpHt)
-gradeA   = input.int(5, "Grade A at score of at least (of 6)", minval = 1, maxval = 6, group = grpHt)
-gradeB   = input.int(4, "Grade B at score of at least (of 6)", minval = 1, maxval = 6, group = grpHt)
+stMult   = input.float(2.168, "SuperTrend multiplier", minval = 0.1, step = 0.1, group = grpHt)
+stLen    = input.int(8, "SuperTrend ATR length", minval = 1, group = grpHt)
+
+// ══ Inputs: score factors ═════════════════════════════════════════════════
+grpSc = "Score factors"
+gRsiLen  = input.int(14, "Divergence factor: RSI length", minval = 2, group = grpSc)
+gDivLen  = input.int(3, "Divergence factor: pivot length", minval = 1, group = grpSc)
 
 // ══ Inputs: dashboard ═════════════════════════════════════════════════════
 grpTb = "Dashboard"
@@ -137,17 +126,12 @@ tablePosIn = input.string("Top right", "Table position", options = ["Top right",
 tableSizeIn = input.string("Small", "Table text size", options = ["Tiny", "Small", "Normal"], group = grpTb)
 
 // ══ Inputs: s / r letters ═════════════════════════════════════════════════
-// Both setups need the previous bar to have closed beyond the band.
-// Setup 1 (rejection): wick through the band, close back inside, previous-bar RSI at an extreme.
-// Setup 2 (far wick): wick through the band by a large amount, opening beyond the band,
-//                     making a new extreme versus the previous bar.
+// Setup 1 (rejection): previous bar closed beyond the band, wick through the band, close back inside,
+// previous-bar RSI at an extreme.
 grpLt = "s / r Letters"
 l1In     = input.float(0.025, "Setup 1: close back inside the band by (x half-width)", step = 0.005, minval = 0.0, group = grpLt)
 l1RsiR   = input.float(60.8, "Setup 1 r: previous-bar RSI above", group = grpLt)
 l1RsiS   = input.float(36.0, "Setup 1 s: previous-bar RSI below", group = grpLt)
-l2Ext    = input.float(0.35, "Setup 2: wick beyond the band by (x half-width)", step = 0.05, minval = 0.0, group = grpLt)
-l2Open   = input.float(0.06, "Setup 2: open beyond the band by (x half-width)", step = 0.01, minval = 0.0, group = grpLt)
-l2New    = input.float(0.0, "Setup 2: new extreme vs previous bar by at least (x half-width)", step = 0.01, group = grpLt)
 
 // ══ Inputs: right-hand S / M / R labels (drawn objects - colours cannot live in Style) ═
 grpExt = "Right-hand level labels (colours)"
@@ -167,7 +151,7 @@ divNames     = input.string("Full", "Show indicator name", options = ["Full", "F
 divMaxPP     = input.int(10, "Maximum pivot points to check", minval = 1, maxval = 20, group = grpDiv)
 divMaxBars   = input.int(100, "Maximum bars to check", minval = 30, maxval = 200, group = grpDiv)
 divShowLast  = input.bool(true, "Show only last divergence", group = grpDiv)
-divNoConfirm = input.bool(false, "Don't wait for confirmation", group = grpDiv)
+divNoConfirm = input.bool(true, "Don't wait for confirmation", group = grpDiv)
 divLines     = input.bool(true, "Show divergence lines", group = grpDiv)
 divPivots    = input.bool(false, "Show pivot points", group = grpDiv)
 regStyleIn   = input.string("Solid", "Regular divergence line style", options = ["Solid", "Dashed", "Dotted"], group = grpDiv)
@@ -180,6 +164,22 @@ colPosHid    = input.color(color.lime, "Positive hidden divergence", group = grp
 colNegHid    = input.color(color.red, "Negative hidden divergence", group = grpDiv)
 colTxtPos    = input.color(color.black, "Positive divergence text", group = grpDiv)
 colTxtNeg    = input.color(color.white, "Negative divergence text", group = grpDiv)
+
+// ══ Inputs: entry signal (dashboard) ══════════════════════════════════════
+grpSg = "Entry Signal (dashboard)"
+gateTF     = input.timeframe("60", "1H SuperTrend timeframe (dashboard information only)", group = grpSg)
+sgTdBars   = input.int(7, "Score: TD of the same side within the last N bars (signal bar counts)", minval = 1, maxval = 20, group = grpSg)
+sgMinScore = input.int(3, "Minimum score (of 6)", minval = 1, maxval = 6, group = grpSg)
+sgUseSar   = input.bool(true, "Require Parabolic SAR agreement", group = grpSg)
+sarStart   = input.float(0.02, "SAR start", minval = 0.001, step = 0.01, group = grpSg)
+sarInc     = input.float(0.02, "SAR increment", minval = 0.001, step = 0.01, group = grpSg)
+sarMax     = input.float(0.2, "SAR maximum", minval = 0.01, step = 0.01, group = grpSg)
+comTF      = input.timeframe("60", "Score: COM M trend timeframe", group = grpSg)
+srRsiLen   = input.int(14, "StochRSI: RSI length", minval = 1, group = grpSg)
+srStochLen = input.int(14, "StochRSI: stochastic length", minval = 1, group = grpSg)
+srSmK      = input.int(3, "StochRSI: K smoothing", minval = 1, group = grpSg)
+srSmD      = input.int(3, "StochRSI: D smoothing", minval = 1, group = grpSg)
+st3Live    = input.bool(true, "5m signal: use the forming 3m candle for StochRSI (off = last closed 3m candle)", group = grpSg)
 
 // ══ S / M / R: Range Filter [DW] ══════════════════════════════════════════
 // Range = rfQty x EMA(|bar-to-bar change|, rfPer), optionally smoothed by a second EMA.
@@ -225,6 +225,36 @@ float lineS = rfAvg ? condEma(rfFilt - rfR, rfMoved, rfAvgN) : rfFilt - rfR
 var int trend = 0
 trend := lineM > lineM[1] ? 1 : lineM < lineM[1] ? -1 : trend
 isUp = trend == 1
+
+// Same engine as above, packaged so it can run on another timeframe (COM M trend on 1H).
+// Returns +1 / -1 / 0 (direction of the last M move).
+rfTrendFn() =>
+    float h = rfMov == "Wicks" ? high : close
+    float l = rfMov == "Wicks" ? low : close
+    float x = (h + l) / 2.0
+    float ac = ta.ema(math.abs(x - x[1]), rfPer)
+    float rg = rfQty * ac
+    float rr = rfSmooth ? ta.ema(rg, rfSmPer) : rg
+    var float filt = na
+    float prev = na(filt) ? x : filt
+    float nxt = prev
+    if not na(rr)
+        if rfType == "Type 1"
+            if h - rr > prev
+                nxt := h - rr
+            if l + rr < prev
+                nxt := l + rr
+        else
+            if h >= prev + rr
+                nxt := prev + math.floor(math.abs(h - prev) / rr) * rr
+            if l <= prev - rr
+                nxt := prev - math.floor(math.abs(l - prev) / rr) * rr
+    filt := nxt
+    bool moved = filt != filt[1]
+    float m = rfAvg ? condEma(filt, moved, rfAvgN) : filt
+    var int tr = 0
+    tr := m > m[1] ? 1 : m < m[1] ? -1 : tr
+    tr
 
 // ── Plots (all colours / widths / visibility are in the Style tab) ────────
 pR  = plot(lineR, "R", color = #FF4242, linewidth = 2, style = plot.style_linebr)
@@ -333,13 +363,21 @@ if barstate.islast
 
 plot(vwapV, "VWAP", color = color.rgb(230, 140, 6), linewidth = 1)
 
-// ── Higher-timeframe trend (SuperTrend) and local SuperTrend ──────────────
+// ── SuperTrends: 4H and 1H are information only, local = chart timeframe ──
 [stHTF, dirHTF] = request.security(syminfo.tickerid, htfTF, ta.supertrend(stMult, stLen), gaps = barmerge.gaps_off)
-[stLoc, dirLoc] = ta.supertrend(stMult, stLen)
+[st1H, dir1H] = request.security(syminfo.tickerid, gateTF, ta.supertrend(stMult, stLen), gaps = barmerge.gaps_off)
+[_, dirLoc] = ta.supertrend(stMult, stLen)
 htfBull = dirHTF < 0
 htfBear = dirHTF > 0
+h1Bull = dir1H < 0
+h1Bear = dir1H > 0
 locBull = dirLoc < 0
 locBear = dirLoc > 0
+
+// COM M trend on the 1H (information row; the same value feeds the score inside the entry pack)
+int comTrendHtf = request.security(syminfo.tickerid, comTF, rfTrendFn(), gaps = barmerge.gaps_off)
+comBull = comTrendHtf == 1
+comBear = comTrendHtf == -1
 
 // ── Consolidated trend + TD (FGI Pro Strategy v3.0, same logic) ───────────
 // ctUp = EMA 1 above EMA 2; the trend is confirmed after two bars in a row (Pro: count > 1).
@@ -357,8 +395,13 @@ else
 bool ctConfirmedBull = ctBuyCount > 1
 bool ctConfirmedBear = ctSellCount > 1
 float consolidatedTrendLine = ta.ema(close, math.round((ema1Len + ema2Len) / 2))
-color consolidatedTrendCol = ctConfirmedBull ? ctBullCol : ctConfirmedBear ? ctBearCol : ctNeutralCol
-plot(showCT ? consolidatedTrendLine : na, "Consolidated trend", color = consolidatedTrendCol, linewidth = ctWidth, style = plot.style_line)
+// Three plots (one per state) so the colours and width live in the Style tab. Each plot also
+// includes the first bar of the next state, so the line stays joined at every colour change.
+bool ctNeutral = not ctConfirmedBull and not ctConfirmedBear
+float ctLineOn = showCT ? consolidatedTrendLine : na
+plot((ctConfirmedBull or ctConfirmedBull[1]) ? ctLineOn : na, "Consolidated trend - bullish", color = #00E5FF, linewidth = 2, style = plot.style_linebr)
+plot((ctConfirmedBear or ctConfirmedBear[1]) ? ctLineOn : na, "Consolidated trend - bearish", color = #E040FB, linewidth = 2, style = plot.style_linebr)
+plot((ctNeutral or ctNeutral[1]) ? ctLineOn : na, "Consolidated trend - unconfirmed", color = #FF530D, linewidth = 2, style = plot.style_linebr)
 
 // TD: EMA cross or local SuperTrend flips, and both now point the same way
 bool ctBullFlip = ctUp and not ctUp[1]
@@ -370,102 +413,6 @@ bool tdBear = (ctBearFlip or stBearFlip) and not ctUp and locBear
 plotshape(showTD and tdBull, "TD bull", shape.labelup, location.belowbar, color.green, text = "TD", textcolor = color.white, size = size.small)
 plotshape(showTD and tdBear, "TD bear", shape.labeldown, location.abovebar, color.red, text = "TD", textcolor = color.white, size = size.small)
 
-// ── Confluence factors (FGI Pro Strategy v3.0 logic) ──────────────────────
-gAtr   = ta.atr(gAtrLen)
-gRsi   = ta.rsi(close, gRsiLen)
-gRsi1  = request.security(syminfo.tickerid, gTf1, ta.rsi(close, gRsiLen), gaps = barmerge.gaps_off)
-gRsi2  = request.security(syminfo.tickerid, gTf2, ta.rsi(close, gRsiLen), gaps = barmerge.gaps_off)
-[gBbMid, gBbUp, gBbDn] = ta.bb(close, gBbLen, gBbDev)
-
-gPivH = ta.pivothigh(high, gSwLen, gSwLen)
-gPivL = ta.pivotlow(low, gSwLen, gSwLen)
-var float gLastSH = na
-var float gLastSL = na
-if not na(gPivH)
-    gLastSH := high[gSwLen]
-if not na(gPivL)
-    gLastSL := low[gSwLen]
-
-// Sweep & engulf (sticky 5 bars)
-gSweepBull = low < low[1] and close > high[1] and close > open
-gSweepBear = high > high[1] and close < low[1] and close < open
-var bool gRecSweepBull = false
-var bool gRecSweepBear = false
-var int gSBullBar = 0
-var int gSBearBar = 0
-if gSweepBull
-    gRecSweepBull := true
-    gSBullBar := bar_index
-if gSweepBear
-    gRecSweepBear := true
-    gSBearBar := bar_index
-if bar_index - gSBullBar > 5
-    gRecSweepBull := false
-if bar_index - gSBearBar > 5
-    gRecSweepBear := false
-
-// Single-previous-pivot RSI divergence (sticky 20 bars)
-gDivPivH = ta.pivothigh(gRsi, gDivLen, gDivLen)
-gDivPivL = ta.pivotlow(gRsi, gDivLen, gDivLen)
-var float gPRH = na
-var float gPPH = na
-var float gCRH = na
-var float gCPH = na
-var float gPRL = na
-var float gPPL = na
-var float gCRL = na
-var float gCPL = na
-if not na(gDivPivH)
-    gPRH := gCRH
-    gPPH := gCPH
-    gCRH := gRsi[gDivLen]
-    gCPH := high[gDivLen]
-if not na(gDivPivL)
-    gPRL := gCRL
-    gPPL := gCPL
-    gCRL := gRsi[gDivLen]
-    gCPL := low[gDivLen]
-gBullDiv = not na(gPRL) and not na(gCRL) and gCPL < gPPL and gCRL > gPRL and gCRL < 50
-gBearDiv = not na(gPRH) and not na(gCRH) and gCPH > gPPH and gCRH < gPRH and gCRH > 50
-var bool gRecBullDiv = false
-var bool gRecBearDiv = false
-var int gBdBar = 0
-var int gBrBar = 0
-if gBullDiv
-    gRecBullDiv := true
-    gBdBar := bar_index
-if gBearDiv
-    gRecBearDiv := true
-    gBrBar := bar_index
-if bar_index - gBdBar > 20
-    gRecBullDiv := false
-if bar_index - gBrBar > 20
-    gRecBearDiv := false
-
-// Entry zone
-gAtSup = low <= gBbDn or (not na(gLastSL) and low <= gLastSL + gAtr * gSrBuf and close >= gLastSL - gAtr * 0.5)
-gAtRes = high >= gBbUp or (not na(gLastSH) and high >= gLastSH - gAtr * gSrBuf and close <= gLastSH + gAtr * 0.5)
-gNearEma = math.abs(close - ema3) <= gAtr * gEmaNear
-
-// Scores (0-6 per side)
-lF1 = htfBull ? 1 : 0
-lF2 = locBull ? 1 : 0
-lF3 = gRsi1 > gRsiLong and gRsi2 > gRsiLong ? 1 : 0
-lF4 = gAtSup or gNearEma ? 1 : 0
-lF5 = gRecBullDiv ? 1 : 0
-lF6 = gRecSweepBull ? 1 : 0
-lScore = lF1 + lF2 + lF3 + lF4 + lF5 + lF6
-sF1 = htfBear ? 1 : 0
-sF2 = locBear ? 1 : 0
-sF3 = gRsi1 < gRsiShort and gRsi2 < gRsiShort ? 1 : 0
-sF4 = gAtRes or gNearEma ? 1 : 0
-sF5 = gRecBearDiv ? 1 : 0
-sF6 = gRecSweepBear ? 1 : 0
-sScore = sF1 + sF2 + sF3 + sF4 + sF5 + sF6
-
-gradeOf(int s) =>
-    s >= gradeA ? "A" : s >= gradeB ? "B" : "C"
-
 // ── Levels extended to the right (COM: last bar -> +21 bars, label at the end) ─
 var line lnR = na
 var line lnM = na
@@ -474,9 +421,9 @@ var label lbR = na
 var label lbM = na
 var label lbS = na
 
-cR = lineR[1]
-cM = lineM[1]
-cS = lineS[1]
+cR = lineR
+cM = lineM
+cS = lineS
 colXM = isUp ? colXMUp : colXMDn
 
 if showExt and barstate.islast
@@ -502,13 +449,9 @@ prevBeyondS = close[1] < lineS[1]
 
 r1 = prevBeyondR and high > lineR and close < lineR - l1In * hwNow and rsiD[1] > l1RsiR
 s1 = prevBeyondS and low < lineS and close > lineS + l1In * hwNow and rsiD[1] < l1RsiS
-r2 = prevBeyondR and high > lineR and (high - lineR) / hwNow > l2Ext and (open - lineR) / hwNow > l2Open and (high - high[1]) / hwNow >= l2New
-s2 = prevBeyondS and low < lineS and (lineS - low) / hwNow > l2Ext and (lineS - open) / hwNow > l2Open and (low[1] - low) / hwNow >= l2New
 
 plotchar(r1, "r (setup 1)", "r", location = location.abovebar, color = #FF5252, size = size.tiny)
 plotchar(s1, "s (setup 1)", "s", location = location.belowbar, color = #4CAF50, size = size.tiny)
-plotchar(r2, "r (setup 2)", "r", location = location.abovebar, color = #FF9800, size = size.tiny)
-plotchar(s2, "s (setup 2)", "s", location = location.belowbar, color = #2962FF, size = size.tiny)
 
 // ══ Trend flips and BUY / SELL ════════════════════════════════════════════
 // bullT / bearT: M turns up / down (price broke out of the held R / S band).
@@ -521,67 +464,165 @@ bearT   = trend == -1 and trend[1] == 1
 buySig  = bullT and (not useGate or rsiLow <= buyOS)
 sellSig = bearT and (not useGate or rsiHigh >= sellOB)
 
-// Higher-timeframe tag: a signal against the higher-timeframe trend is drawn muted with a "✗".
-bullWith = not tagHtf or htfBull
-bearWith = not tagHtf or htfBear
-plotshape(bullT and not latestOnly and bullWith, "bullT", shape.labelup, location.belowbar, #67BF15, text = "bullT", textcolor = color.white, size = size.small)
-plotshape(bullT and not latestOnly and not bullWith, "bullT (against 4H)", shape.labelup, location.belowbar, color.new(#67BF15, 55), text = "bullT ✗", textcolor = color.new(color.white, 25), size = size.small)
-plotshape(bearT and not latestOnly and bearWith, "bearT", shape.labeldown, location.abovebar, #A91893, text = "bearT", textcolor = color.white, size = size.small)
-plotshape(bearT and not latestOnly and not bearWith, "bearT (against 4H)", shape.labeldown, location.abovebar, color.new(#A91893, 55), text = "bearT ✗", textcolor = color.new(color.white, 25), size = size.small)
+plotshape(bullT and not latestOnly, "bullT", shape.labelup, location.belowbar, #67BF15, text = "bullT", textcolor = color.white, size = size.small)
+plotshape(bearT and not latestOnly, "bearT", shape.labeldown, location.abovebar, #A91893, text = "bearT", textcolor = color.white, size = size.small)
 
 // Latest-only mode: keep a single bullT and a single bearT label (the previous one is deleted)
 var label lbBullT = na
 var label lbBearT = na
 if latestOnly and bullT
     label.delete(lbBullT)
-    lbBullT := label.new(bar_index, na, bullWith ? "bullT" : "bullT ✗", yloc = yloc.belowbar, style = label.style_label_up, color = colBullL, textcolor = colTxtL, size = size.small)
+    lbBullT := label.new(bar_index, na, "bullT", yloc = yloc.belowbar, style = label.style_label_up, color = colBullL, textcolor = colTxtL, size = size.small)
 if latestOnly and bearT
     label.delete(lbBearT)
-    lbBearT := label.new(bar_index, na, bearWith ? "bearT" : "bearT ✗", yloc = yloc.abovebar, style = label.style_label_down, color = colBearL, textcolor = colTxtL, size = size.small)
+    lbBearT := label.new(bar_index, na, "bearT", yloc = yloc.abovebar, style = label.style_label_down, color = colBearL, textcolor = colTxtL, size = size.small)
 
-plotshape(buySig and bullWith, "BUY", shape.labelup, location.belowbar, #31BD4F, text = "BUY", textcolor = color.white, size = size.small)
-plotshape(buySig and not bullWith, "BUY (against 4H)", shape.labelup, location.belowbar, color.new(#31BD4F, 55), text = "BUY ✗", textcolor = color.new(color.white, 25), size = size.small)
-plotshape(sellSig and bearWith, "SELL", shape.labeldown, location.abovebar, #FF3E3E, text = "SELL", textcolor = color.white, size = size.small)
-plotshape(sellSig and not bearWith, "SELL (against 4H)", shape.labeldown, location.abovebar, color.new(#FF3E3E, 55), text = "SELL ✗", textcolor = color.new(color.white, 25), size = size.small)
+plotshape(buySig, "BUY", shape.labelup, location.belowbar, #31BD4F, text = "BUY", textcolor = color.white, size = size.small)
+plotshape(sellSig, "SELL", shape.labeldown, location.abovebar, #FF3E3E, text = "SELL", textcolor = color.white, size = size.small)
 
-// ══ Dashboard ═════════════════════════════════════════════════════════════
-var int lastFlipBar = na
-if bullT or bearT
-    lastFlipBar := bar_index
+// ══ Entry signal pack: the base signal, evaluated in whatever timeframe it is requested in ═══
+// Everything is read from the previous bar ([1]) of that timeframe, i.e. the last CLOSED bar.
+// Mandatory here: local SuperTrend and SAR. Score (of 6): local SuperTrend, COM M trend on 1H,
+// price vs EMA 1, TD within the last bars, RSI divergence, sweep & engulf. The StochRSI gate is
+// added outside (it uses a different timeframe). Returns, per side: local ok, SAR ok,
+// score, base signal.
+entryPack() =>
+    // Local SuperTrend and TD
+    [_, dirX] = ta.supertrend(stMult, stLen)
+    bool xBull = dirX < 0
+    bool xBear = dirX > 0
+    float e1 = ta.ema(emaSrc, ema1Len)
+    float e2 = ta.ema(emaSrc, ema2Len)
+    bool up = e1 > e2
+    bool tdB = ((up and not up[1]) or (xBull and not xBull[1])) and up and xBull
+    bool tdS = ((not up and up[1]) or (xBear and not xBear[1])) and not up and xBear
+    bool tdBOk = nz(ta.barssince(tdB), 9999) < sgTdBars
+    bool tdSOk = nz(ta.barssince(tdS), 9999) < sgTdBars
+    // Sweep & engulf (sticky 5 bars)
+    bool swB = low < low[1] and close > high[1] and close > open
+    bool swS = high > high[1] and close < low[1] and close < open
+    var bool recSwB = false
+    var bool recSwS = false
+    var int swBBar = 0
+    var int swSBar = 0
+    if swB
+        recSwB := true
+        swBBar := bar_index
+    if swS
+        recSwS := true
+        swSBar := bar_index
+    if bar_index - swBBar > 5
+        recSwB := false
+    if bar_index - swSBar > 5
+        recSwS := false
+    // Single-previous-pivot RSI divergence (sticky 20 bars)
+    float rs = ta.rsi(close, gRsiLen)
+    float pvH = ta.pivothigh(rs, gDivLen, gDivLen)
+    float pvL = ta.pivotlow(rs, gDivLen, gDivLen)
+    var float pRH = na
+    var float pPH = na
+    var float cRH = na
+    var float cPH = na
+    var float pRL = na
+    var float pPL = na
+    var float cRL = na
+    var float cPL = na
+    if not na(pvH)
+        pRH := cRH
+        pPH := cPH
+        cRH := rs[gDivLen]
+        cPH := high[gDivLen]
+    if not na(pvL)
+        pRL := cRL
+        pPL := cPL
+        cRL := rs[gDivLen]
+        cPL := low[gDivLen]
+    bool bDiv = not na(pRL) and not na(cRL) and cPL < pPL and cRL > pRL and cRL < 50
+    bool sDiv = not na(pRH) and not na(cRH) and cPH > pPH and cRH < pRH and cRH > 50
+    var bool recBD = false
+    var bool recSD = false
+    var int bdBar = 0
+    var int sdBar = 0
+    if bDiv
+        recBD := true
+        bdBar := bar_index
+    if sDiv
+        recSD := true
+        sdBar := bar_index
+    if bar_index - bdBar > 20
+        recBD := false
+    if bar_index - sdBar > 20
+        recSD := false
+    // SAR and COM M trend on the 1H (a request nested inside the requested timeframe)
+    float sv = ta.sar(sarStart, sarInc, sarMax)
+    bool sarB = not sgUseSar or close > sv
+    bool sarS = not sgUseSar or close < sv
+    int comT = request.security(syminfo.tickerid, comTF, rfTrendFn(), gaps = barmerge.gaps_off)
+    // Score, base signal
+    int lSc = (xBull ? 1 : 0) + (comT == 1 ? 1 : 0) + (close > e1 ? 1 : 0) + (tdBOk ? 1 : 0) + (recBD ? 1 : 0) + (recSwB ? 1 : 0)
+    int sSc = (xBear ? 1 : 0) + (comT == -1 ? 1 : 0) + (close < e1 ? 1 : 0) + (tdSOk ? 1 : 0) + (recSD ? 1 : 0) + (recSwS ? 1 : 0)
+    bool lBase = xBull and sarB and lSc >= sgMinScore
+    bool sBase = xBear and sarS and sSc >= sgMinScore
+    [xBull[1] ? 1 : 0, sarB[1] ? 1 : 0, lSc[1], lBase[1] ? 1 : 0, xBear[1] ? 1 : 0, sarS[1] ? 1 : 0, sSc[1], sBase[1] ? 1 : 0]
 
+// StochRSI K versus D: +1 = K above D, -1 = K below D, 0 = equal. live = forming candle, else the
+// last closed candle of the requested timeframe.
+stochDirFn(bool live) =>
+    float r = ta.rsi(close, srRsiLen)
+    float k = ta.sma(ta.stoch(r, r, r, srStochLen), srSmK)
+    float d = ta.sma(k, srSmD)
+    float kk = live ? k : k[1]
+    float dd = live ? d : d[1]
+    kk > dd ? 1 : kk < dd ? -1 : 0
+
+[a5LLoc, a5LSar, a5LSc, a5LBase, a5SLoc, a5SSar, a5SSc, a5SBase] = request.security(syminfo.tickerid, "5", entryPack(), gaps = barmerge.gaps_off)
+[a15LLoc, a15LSar, a15LSc, a15LBase, a15SLoc, a15SSar, a15SSc, a15SBase] = request.security(syminfo.tickerid, "15", entryPack(), gaps = barmerge.gaps_off)
+int stoch3Dir = request.security(syminfo.tickerid, "3", stochDirFn(st3Live), gaps = barmerge.gaps_off)
+int stoch5Dir = request.security(syminfo.tickerid, "5", stochDirFn(false), gaps = barmerge.gaps_off)
+
+// Final signals: base signal AND the StochRSI gate (5m signal: 3m StochRSI, 15m signal: 5m StochRSI)
+bool l5Final  = a5LBase == 1 and stoch3Dir == 1
+bool s5Final  = a5SBase == 1 and stoch3Dir == -1
+bool l15Final = a15LBase == 1 and stoch5Dir == 1
+bool s15Final = a15SBase == 1 and stoch5Dir == -1
+
+// ══ Dashboard: 4H / 1H SuperTrend and COM M trend (info), then the 5m and 15m entry signals ═══
 tblPos = tablePosIn == "Top right" ? position.top_right : tablePosIn == "Top left" ? position.top_left : tablePosIn == "Middle right" ? position.middle_right : tablePosIn == "Middle left" ? position.middle_left : tablePosIn == "Bottom right" ? position.bottom_right : position.bottom_left
 tblSize = tableSizeIn == "Tiny" ? size.tiny : tableSizeIn == "Normal" ? size.normal : size.small
-var table dash = table.new(tblPos, 2, 11, bgcolor = color.new(#131722, 12), border_width = 1, border_color = color.new(color.gray, 60), frame_width = 1, frame_color = color.new(color.gray, 40))
+var table dash = table.new(tblPos, 2, 10, bgcolor = color.new(#131722, 12), border_width = 1, border_color = color.new(color.gray, 60), frame_width = 1, frame_color = color.new(color.gray, 40))
 
 dashRow(int r, string k, string v, color vc) =>
     table.cell(dash, 0, r, k, text_color = color.new(color.white, 15), text_halign = text.align_left, text_size = tblSize)
     table.cell(dash, 1, r, v, text_color = vc, text_halign = text.align_left, text_size = tblSize)
 
+gatesTxt(int loc, int sar, bool sto, int sc) =>
+    "Loc" + (loc == 1 ? "✓" : "✗") + " SAR" + (sar == 1 ? "✓" : "✗") + " Stoch" + (sto ? "✓" : "✗") + " " + str.tostring(sc) + "/6" + (sc >= sgMinScore ? "✓" : "✗")
+
+sigTxtOf(bool lFin, bool sFin, bool lBase, bool sBase) =>
+    lFin ? "▲ BUY · active" : sFin ? "▼ SELL · active" : (lBase or sBase) ? "— none · StochRSI not confirming" : "— none"
+
 color cGood = #26A69A
 color cBad  = #EF5350
-color cWarn = #FFA726
 color cDim  = #9598A1
 
 if barstate.islast
     if showTable
-        string flipTxt = (isUp ? "▲ UP" : "▼ DOWN") + (na(lastFlipBar) ? "" : " · " + str.tostring(bar_index - lastFlipBar) + " bars")
-        string lGrade = gradeOf(lScore)
-        string sGrade = gradeOf(sScore)
         string stTxt = (htfBull ? "▲ BULL" : htfBear ? "▼ BEAR" : "—") + " · stop " + str.tostring(stHTF, format.mintick) + " (" + str.tostring(math.abs(close - stHTF) / close * 100, "#.00") + "%)"
+        string st1Txt = (h1Bull ? "▲ BULL" : h1Bear ? "▼ BEAR" : "—") + " · stop " + str.tostring(st1H, format.mintick) + " (" + str.tostring(math.abs(close - st1H) / close * 100, "#.00") + "%)"
+        string sarTxt = sgUseSar ? "" : " SAR off"
         table.cell(dash, 0, 0, "FGI Replica V3", text_color = color.white, text_halign = text.align_left, text_size = tblSize, bgcolor = color.new(#1E3A8A, 20))
-        table.cell(dash, 1, 0, syminfo.ticker + " " + timeframe.period, text_color = color.white, text_halign = text.align_left, text_size = tblSize, bgcolor = color.new(#1E3A8A, 20))
-        dashRow(1, "M trend (COM)", flipTxt, isUp ? cGood : cBad)
-        dashRow(2, "4H SuperTrend (" + htfTF + ")", stTxt, htfBull ? cGood : htfBear ? cBad : cDim)
-        dashRow(3, "Local SuperTrend", locBull ? "▲ BULL" : locBear ? "▼ BEAR" : "—", locBull ? cGood : locBear ? cBad : cDim)
-        dashRow(4, "Consolidated trend", ctConfirmedBull ? "▲ BULL" : ctConfirmedBear ? "▼ BEAR" : "◆ unconfirmed", ctConfirmedBull ? cGood : ctConfirmedBear ? cBad : cWarn)
-        dashRow(5, "RSI " + gTf1 + " / " + gTf2, str.tostring(gRsi1, "#.0") + " / " + str.tostring(gRsi2, "#.0"), cDim)
-        dashRow(6, "BUY gate (min RSI " + str.tostring(gateBars) + "b)", str.tostring(rsiLow, "#.0") + (rsiLow <= buyOS ? " ✓" : " ✗"), rsiLow <= buyOS ? cGood : cDim)
-        dashRow(7, "SELL gate (max RSI " + str.tostring(gateBars) + "b)", str.tostring(rsiHigh, "#.0") + (rsiHigh >= sellOB ? " ✓" : " ✗"), rsiHigh >= sellOB ? cBad : cDim)
-        dashRow(8, "Confluence now · Long", str.tostring(lScore) + "/6 " + lGrade, lScore >= gradeA ? cGood : lScore >= gradeB ? cWarn : cDim)
-        dashRow(9, "Confluence now · Short", str.tostring(sScore) + "/6 " + sGrade, sScore >= gradeA ? cBad : sScore >= gradeB ? cWarn : cDim)
-        dashRow(10, "Price vs VWAP", close >= vwapV ? "▲ above" : "▼ below", close >= vwapV ? cGood : cBad)
+        table.cell(dash, 1, 0, syminfo.ticker + (st3Live ? " · closed bars, 3m Stoch live" : " · closed bars"), text_color = color.white, text_halign = text.align_left, text_size = tblSize, bgcolor = color.new(#1E3A8A, 20))
+        dashRow(1, "4H SuperTrend", stTxt, htfBull ? cGood : htfBear ? cBad : cDim)
+        dashRow(2, "1H SuperTrend", st1Txt, h1Bull ? cGood : h1Bear ? cBad : cDim)
+        dashRow(3, "COM M trend (" + comTF + ")", comBull ? "▲ UP" : comBear ? "▼ DOWN" : "—", comBull ? cGood : comBear ? cBad : cDim)
+        dashRow(4, "5m · Long" + sarTxt, gatesTxt(a5LLoc, a5LSar, stoch3Dir == 1, a5LSc), l5Final ? cGood : cDim)
+        dashRow(5, "5m · Short" + sarTxt, gatesTxt(a5SLoc, a5SSar, stoch3Dir == -1, a5SSc), s5Final ? cBad : cDim)
+        dashRow(6, "15m · Long" + sarTxt, gatesTxt(a15LLoc, a15LSar, stoch5Dir == 1, a15LSc), l15Final ? cGood : cDim)
+        dashRow(7, "15m · Short" + sarTxt, gatesTxt(a15SLoc, a15SSar, stoch5Dir == -1, a15SSc), s15Final ? cBad : cDim)
+        dashRow(8, "ENTRY 5m", sigTxtOf(l5Final, s5Final, a5LBase == 1, a5SBase == 1), l5Final ? cGood : s5Final ? cBad : cDim)
+        dashRow(9, "ENTRY 15m", sigTxtOf(l15Final, s15Final, a15LBase == 1, a15SBase == 1), l15Final ? cGood : s15Final ? cBad : cDim)
     else
-        table.clear(dash, 0, 0, 1, 10)
+        table.clear(dash, 0, 0, 1, 9)
 
 // ══════════════════════════════════════════════════════════════════════════
 // RSI divergence (port of LonesomeTheBlue's "Divergence for Many Indicators v4")
@@ -674,17 +715,13 @@ divNegative(float src, int cond) =>
                     break
     divlen
 
-// Evaluated on every bar, then filtered by the divergence type option
-rawPosReg = divPositive(divRsi, 1)
-rawNegReg = divNegative(divRsi, 1)
-rawPosHid = divPositive(divRsi, 2)
-rawNegHid = divNegative(divRsi, 2)
+// Only the requested divergence types are evaluated (the loops are the expensive part)
 regOn = divType == "Regular" or divType == "Regular/Hidden"
 hidOn = divType == "Hidden" or divType == "Regular/Hidden"
-dPosReg = regOn ? rawPosReg : 0
-dNegReg = regOn ? rawNegReg : 0
-dPosHid = hidOn ? rawPosHid : 0
-dNegHid = hidOn ? rawNegHid : 0
+int dPosReg = regOn ? divPositive(divRsi, 1) : 0
+int dNegReg = regOn ? divNegative(divRsi, 1) : 0
+int dPosHid = hidOn ? divPositive(divRsi, 2) : 0
+int dNegHid = hidOn ? divNegative(divRsi, 2) : 0
 
 // Helpers to remove old lines / labels
 deleteAllLines(array<line> arr) =>
@@ -803,9 +840,13 @@ alertcondition(buySig, "BUY", "FGI Replica V3: BUY")
 alertcondition(sellSig, "SELL", "FGI Replica V3: SELL")
 alertcondition(tdBull, "TD bull", "FGI Replica V3: TD bull")
 alertcondition(tdBear, "TD bear", "FGI Replica V3: TD bear")
-alertcondition(r1 or r2, "r letter", "FGI Replica V3: r")
-alertcondition(s1 or s2, "s letter", "FGI Replica V3: s")
+alertcondition(r1, "r letter", "FGI Replica V3: r")
+alertcondition(s1, "s letter", "FGI Replica V3: s")
 alertcondition(posRegDet, "Positive Regular RSI Divergence", "FGI Replica V3: Positive Regular RSI Divergence")
 alertcondition(negRegDet, "Negative Regular RSI Divergence", "FGI Replica V3: Negative Regular RSI Divergence")
 alertcondition(posHidDet, "Positive Hidden RSI Divergence", "FGI Replica V3: Positive Hidden RSI Divergence")
 alertcondition(negHidDet, "Negative Hidden RSI Divergence", "FGI Replica V3: Negative Hidden RSI Divergence")
+alertcondition(l5Final and not l5Final[1], "Entry BUY 5m", "FGI Replica V3: entry BUY 5m")
+alertcondition(s5Final and not s5Final[1], "Entry SELL 5m", "FGI Replica V3: entry SELL 5m")
+alertcondition(l15Final and not l15Final[1], "Entry BUY 15m", "FGI Replica V3: entry BUY 15m")
+alertcondition(s15Final and not s15Final[1], "Entry SELL 15m", "FGI Replica V3: entry SELL 15m")

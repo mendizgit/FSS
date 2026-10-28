@@ -9,6 +9,7 @@ import type {
   HistoryResponse,
   MoversResponse,
   NewsResponse,
+  PaperResponse,
   SignalsResponse,
   StatusResponse,
   WindowId,
@@ -67,6 +68,17 @@ export function useSignals() {
   return useQuery({
     queryKey: ["signals"],
     queryFn: ({ signal }) => apiGet<SignalsResponse>("/signals/latest", signal),
+  });
+}
+
+export type PaperStrategy = "v4" | "fgi";
+
+export function usePaper(strategy: PaperStrategy = "v4") {
+  return useQuery({
+    queryKey: ["paper", strategy],
+    queryFn: ({ signal }) =>
+      apiGet<PaperResponse>(strategy === "fgi" ? "/paper-fgi" : "/paper", signal),
+    refetchInterval: 30_000,
   });
 }
 

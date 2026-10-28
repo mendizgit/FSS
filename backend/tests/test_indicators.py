@@ -17,8 +17,9 @@ from tss.indicators.fgi_v3 import (
     event_at,
     recent_events,
     snapshot,
+    stoch_direction,
 )
-from tss.indicators.primitives import isnan
+from tss.indicators.primitives import isnan, sar, stoch, stoch_rsi
 from tss.indicators.range_filter import RangeFilterParams, cond_ema, range_filter
 from tss.indicators.supertrend import supertrend
 from tss.indicators.zones import ZoneParams, zone_position, zones
@@ -145,7 +146,7 @@ def _bars(n: int, seed: int, minutes: int = 5) -> Bars:
 
 
 def _htf(n: int) -> HtfContext:
-    return HtfContext([-1] * n, [60.0] * n, [60.0] * n)
+    return HtfContext([-1] * n, [1] * n)
 
 
 def test_compute_is_causal_and_deterministic() -> None:
@@ -231,3 +232,55 @@ def test_snapshot_values_are_consistent() -> None:
             or snap.bars_ago == 0
             or last_time <= snap.bar_close_time
         )
+
+
+def test_sar_hand_computed_and_side() -> None:
+    # bar 1 closes above bar 0: SAR starts below at low[0], then moves by 0.02 * (hi - sar)
+    hi = [10.0, 11.0, 12.0, 13.0]
+    lo = [9.0, 10.0, 11.0, 12.0]
+    cl = [9.5, 10.5, 11.5, 12.5]
+    out = sar(hi, lo, cl, 0.02, 0.02, 0.2)
+    assert isnan(out[0]) and out[1] == pytest.approx(9.0)
+    assert all(out[i] < cl[i] for i in (1, 2, 3))
+    assert out[1] <= out[2] < out[3]  # rising trend ratchets up (clamped by older lows at first)
+    down = sar(hi[::-1], lo[::-1], cl[::-1], 0.02, 0.02, 0.2)
+    assert all(down[i] > cl[::-1][i] for i in (1, 2, 3))
+
+
+def test_stoch_and_stoch_rsi_direction() -> None:
+    assert stoch([1.0, 2.0, 3.0, 2.0], 3)[2:] == [100.0, 0.0]
+    assert isnan(stoch([5.0, 5.0, 5.0], 3)[2])  # flat window: Pine divides by zero
+    bars = _bars(300, seed=3)
+    k, d = stoch_rsi(bars.close, 14, 14, 3, 3)
+    expected = 1 if k[-1] > d[-1] else -1 if k[-1] < d[-1] else 0
+    assert stoch_direction(bars.close) == expected
+    assert stoch_direction([1.0, 2.0]) == 0  # not enough bars
+
+
+def test_entry_score_is_five_factors_with_sar_gate() -> None:
+    bars = _bars(700, seed=5)
+    n = len(bars)
+    up = compute(bars, HtfContext([-1] * n, [1] * n))
+    down = compute(bars, HtfContext([-1] * n, [-1] * n))
+    for i in range(n):
+        assert 0 <= up.long_score[i] <= 5 and 0 <= up.short_score[i] <= 5
+        assert len([f for f in up.long_factors[i].split(",") if f]) == up.long_score[i]
+        assert up.long_score[i] - down.long_score[i] == 1  # the 1H M trend is one factor
+        assert down.short_score[i] - up.short_score[i] == 1
+        sv = up.sar[i]
+        if not isnan(sv):
+            # the 1H M trend is a mandatory gate: 2 other factors + SAR on the matching side only
+            assert up.entry_long[i] == (bars.close[i] > sv and up.long_score[i] - 1 >= 2)
+            assert not up.entry_short[i]
+            assert down.entry_short[i] == (bars.close[i] < sv and down.short_score[i] - 1 >= 2)
+            assert not down.entry_long[i]
+    assert any(up.entry_long) and any(down.entry_short)
+    strict = compute(bars, HtfContext([-1] * n, [1] * n), FgiParams(min_other=4))
+    assert sum(strict.entry_long) < sum(up.entry_long)
+
+
+def test_v3_defaults() -> None:
+    p = FgiParams()
+    assert (p.ema1, p.ema2, p.ema3) == (6, 24, 32)
+    assert (p.st_mult, p.st_len) == (2.168, 8)
+    assert p.min_other == 2

@@ -72,6 +72,42 @@ class UniverseCfg(_Strict):
 
 class SignalsCfg(_Strict):
     majors: list[str]
+    min_other_factors: int = Field(default=2, ge=0, le=4)  # besides the mandatory 1H M trend
+    alert_cooldown_minutes: int = Field(default=30, ge=0)  # per symbol and side
+
+
+class PaperCfg(_Strict):
+    """Dummy-money test of the 15m entry signals (analysis only: no orders, public prices)."""
+
+    enabled: bool = True
+    start_balance_usdt: float = Field(default=500, gt=0)
+    leverage: float = Field(default=10, ge=1)
+    margin_per_trade_usdt: float = Field(default=50, gt=0)
+    stop_pct: float = Field(default=1.0, gt=0)  # price move against the entry
+    reward_risk: float = Field(default=2.0, gt=0)  # target = reward_risk x stop distance
+    timeout_minutes: int = Field(default=240, gt=0)
+    fee_pct: float = Field(default=0.02, ge=0)  # per side, on notional
+    slippage_pct: float = Field(default=0.02, ge=0)  # per side, against the trade
+
+
+class FgiPaperCfg(_Strict):
+    """Dummy-money forward test of the FGI Pro strategy on the 15m chart (analysis only)."""
+
+    enabled: bool = False
+    pool_size: int = Field(default=80, gt=0)  # top USDT perpetuals by 24h turnover
+    start_balance_usdt: float = Field(default=500, gt=0)
+    leverage: float = Field(default=10, ge=1)
+    margin_per_trade_usdt: float = Field(default=50, gt=0)
+    max_open: int = Field(default=10, gt=0)
+    min_score: int = Field(default=4, ge=1, le=6)  # of the 6 confluence factors
+    adx_min: float = Field(default=35, gt=0)
+    use_4h: bool = False  # False: trend filter is the 1H SuperTrend only
+    stop_cap_pct: float = Field(default=2.0, gt=0)  # stop never wider than this from the entry
+    tp1_atr: float = Field(default=1.5, gt=0)
+    tp2_atr: float = Field(default=3.5, gt=0)
+    tp1_fraction: float = Field(default=0.5, gt=0, lt=1)
+    fee_pct: float = Field(default=0.02, ge=0)  # per side, on notional
+    slippage_pct: float = Field(default=0.02, ge=0)  # per side, against the trade
 
 
 class LiquidityCfg(_Strict):
@@ -134,6 +170,8 @@ class MexcCfg(_Strict):
 class Thresholds(_Strict):
     universe: UniverseCfg
     signals: SignalsCfg
+    paper: PaperCfg = Field(default_factory=PaperCfg)
+    paper_fgi: FgiPaperCfg = Field(default_factory=FgiPaperCfg)
     liquidity: LiquidityCfg
     kline: KlineCfg
     momentum: MomentumCfg
@@ -146,6 +184,10 @@ class Thresholds(_Strict):
 
 class Denylist(_Strict):
     symbols: list[str] = Field(default_factory=list)
+    suffixes: list[str] = Field(default_factory=list)  # e.g. tokenized stocks: STOCK_USDT
+
+    def is_denied(self, symbol: str) -> bool:
+        return symbol in self.symbols or any(symbol.endswith(s) for s in self.suffixes)
 
 
 class RssSource(_Strict):

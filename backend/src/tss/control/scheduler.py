@@ -61,6 +61,15 @@ def build_scheduler(controller: Controller) -> AsyncIOScheduler:
         **common,
     )
     scheduler.add_job(
+        controller.fgi_paper_job,
+        "cron",
+        minute="*/15",
+        second=40,
+        id="fgi_paper",
+        misfire_grace_time=450,
+        **common,
+    )
+    scheduler.add_job(
         controller.news_job,
         "cron",
         minute="*/15",

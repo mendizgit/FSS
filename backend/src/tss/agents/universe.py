@@ -18,7 +18,7 @@ class UniverseAgent(BaseAgent):
     async def run(self, cycle_id: uuid.UUID, now: datetime) -> AgentResult:
         cfg = self.deps.config
         quote = cfg.thresholds.universe.quote_asset
-        deny = set(cfg.denylist.symbols)
+        denylist = cfg.denylist
         pinned = set(cfg.thresholds.universe.pinned_symbols)
 
         details = await self.deps.futures.contract_detail()
@@ -51,14 +51,14 @@ class UniverseAgent(BaseAgent):
                 "maker_fee_rate": d.makerFeeRate,
                 "taker_fee_rate": d.takerFeeRate,
                 "zero_fee": zero_fee(d.makerFeeRate, d.takerFeeRate),
-                "denylisted": d.symbol in deny,
+                "denylisted": denylist.is_denied(d.symbol),
                 "pinned": d.symbol in pinned,
                 "updated_at": now,
             }
             if spot_symbols is not None:
                 row["spot_symbol"] = spot_symbol_for(d.baseCoin, quote, spot_symbols)
             rows.append(row)
-            if in_universe(d.quoteCoin, d.settleCoin, d.state, quote, deny, d.symbol):
+            if in_universe(d.quoteCoin, d.settleCoin, d.state, quote, denylist.is_denied(d.symbol)):
                 active += 1
         if active == 0:
             raise DataSourceError(

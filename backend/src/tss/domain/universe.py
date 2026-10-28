@@ -5,11 +5,9 @@ from __future__ import annotations
 from collections.abc import Collection
 
 
-def in_universe(
-    quote: str, settle: str, state: int, quote_asset: str, denylist: Collection[str], symbol: str
-) -> bool:
+def in_universe(quote: str, settle: str, state: int, quote_asset: str, denied: bool) -> bool:
     """USDT-quoted and settled, state 0 (enabled, per MEXC docs), not denylisted."""
-    return quote == quote_asset and settle == quote_asset and state == 0 and symbol not in denylist
+    return quote == quote_asset and settle == quote_asset and state == 0 and not denied
 
 
 def zero_fee(maker: float | None, taker: float | None) -> bool | None:

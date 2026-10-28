@@ -199,3 +199,85 @@ def at(series: Sequence[float], i: int, back: int = 0) -> float:
     """series[i - back] with NaN before the start (Pine's x[n])."""
     j = i - back
     return series[j] if 0 <= j < len(series) else NAN
+
+
+def sar(
+    high: Sequence[float],
+    low: Sequence[float],
+    close: Sequence[float],
+    start: float,
+    inc: float,
+    maximum: float,
+) -> Series:
+    """ta.sar(start, inc, max), following the reference implementation in the Pine docs.
+
+    Path dependent: the first bar fixes the initial trend from close[1] vs close[0]. Output is
+    NaN on the first bar (Pine returns na there).
+    """
+    n = len(close)
+    out = [NAN] * n
+    result = max_min = accel = NAN
+    is_below = False
+    for i in range(1, n):
+        first_trend_bar = False
+        if i == 1:
+            if close[1] > close[0]:
+                is_below, max_min, result = True, high[1], low[0]
+            else:
+                is_below, max_min, result = False, low[1], high[0]
+            first_trend_bar = True
+            accel = start
+        result = result + accel * (max_min - result)
+        if is_below:
+            if result > low[i]:
+                first_trend_bar = True
+                is_below = False
+                result = max(high[i], max_min)
+                max_min = low[i]
+                accel = start
+        elif result < high[i]:
+            first_trend_bar = True
+            is_below = True
+            result = min(low[i], max_min)
+            max_min = high[i]
+            accel = start
+        if not first_trend_bar:
+            if is_below:
+                if high[i] > max_min:
+                    max_min = high[i]
+                    accel = min(accel + inc, maximum)
+            elif low[i] < max_min:
+                max_min = low[i]
+                accel = min(accel + inc, maximum)
+        if is_below:
+            result = min(result, low[i - 1])
+            if i > 1:
+                result = min(result, low[i - 2])
+        else:
+            result = max(result, high[i - 1])
+            if i > 1:
+                result = max(result, high[i - 2])
+        out[i] = result
+    return out
+
+
+def stoch(src: Sequence[float], length: int) -> Series:
+    """ta.stoch(src, src, src, length): 100 * (src - lowest) / (highest - lowest); NaN when the
+    window is flat (Pine divides by zero)."""
+    hi = highest(src, length)
+    lo = lowest(src, length)
+    out = [NAN] * len(src)
+    for i in range(len(src)):
+        rng = hi[i] - lo[i]
+        if not (isnan(rng) or isnan(src[i])) and rng != 0:
+            out[i] = 100.0 * (src[i] - lo[i]) / rng
+    return out
+
+
+def stoch_rsi(
+    close: Sequence[float], rsi_len: int, stoch_len: int, k_smooth: int, d_smooth: int
+) -> tuple[Series, Series]:
+    """StochRSI as the Pine script builds it: k = sma(stoch(rsi), kSm), d = sma(k, dSm)."""
+    r = rsi(close, rsi_len)
+    k = sma(stoch(r, stoch_len), k_smooth)
+    return k, sma(k, d_smooth)

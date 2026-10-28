@@ -85,12 +85,12 @@ def event(
         symbol=symbol,
         bias="long" if name in ("BUY", "BULL_T") else "short",
         active=active,
-        trigger_timeframe=tf,
-        trigger_event=name,
+        trigger_timeframe="15m",  # entries are always based on the 15m bar
+        trigger_event=None,
+        score=4,
+        factors="ST,1H,EMA,DIV",
         trigger_bar_close_time=closed,
         against_htf=against,
-        htf_event="BULL_T" if name in ("BUY", "BULL_T") else "BEAR_T",
-        htf_bars_ago=3,
         detected_at=closed,
         notified_at=notified_at,
         updated_at=closed,
@@ -162,13 +162,13 @@ async def scenario_exactly_once(cfg: AppConfig) -> None:
         sym: next(m for m in tg.delivered if f"{sym}USDT.P" in m) for sym in ("BTC", "ETH", "SOL")
     }
     check(
-        "Long alert: bold BTCUSDT.P, Long, 5 min Buy trigger, 1h confirm, bar close, 4H against",
+        "Long alert: bold BTCUSDT.P, Entry Long, 15 min, score + factors, bar close, 4H against",
         [ln for ln in by_symbol["BTC"].splitlines() if not ln.startswith("Bar close : ")]
         == [
             "<b>BTCUSDT.P</b>",
-            "Setup : 🟢 Long",
-            "Trigger : 5 min Buy",
-            "1h confirm : BullT, 3 bars ago",
+            "Entry : 🟢 Long",
+            "Time : 15 min",
+            "Score : 4/5 (ST, 1H, EMA, DIV)",
             "4H trend : ✗ Against",
         ]
         and re.search(r"\nBar close : \d\d:\d\d IST\n", by_symbol["BTC"]) is not None
@@ -176,10 +176,9 @@ async def scenario_exactly_once(cfg: AppConfig) -> None:
         by_symbol["BTC"].replace("\n", " | "),
     )
     check(
-        "Short alert: red Short, 15 min Sell, 1h BearT, 4H With; unknown 4H shows a dash",
-        "Setup : 🔴 Short" in by_symbol["ETH"]
-        and "Trigger : 15 min Sell" in by_symbol["ETH"]
-        and "1h confirm : BearT, 3 bars ago" in by_symbol["ETH"]
+        "Short alert: red Short, 15 min; 4H With; unknown 4H shows a dash",
+        "Entry : 🔴 Short" in by_symbol["ETH"]
+        and "Time : 15 min" in by_symbol["ETH"]
         and "4H trend : ✓ With" in by_symbol["ETH"]
         and "4H trend : —" in by_symbol["SOL"],
     )

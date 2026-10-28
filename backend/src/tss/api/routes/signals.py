@@ -31,12 +31,10 @@ def setup_out(setup: Setup | None) -> SetupOut | None:
     return SetupOut(
         bias=setup.bias,
         trigger_timeframe=setup.trigger_timeframe,
-        trigger_event=setup.trigger_event,
-        trigger_bars_ago=setup.trigger_bars_ago,
+        score=setup.score,
+        factors=setup.factors,
         against_htf=setup.against_htf,
         minutes_ago=setup.minutes_ago,
-        htf_event=setup.htf_event,
-        htf_bars_ago=setup.htf_bars_ago,
     )
 
 

@@ -24,6 +24,7 @@ from tss.indicators.fgi_v3 import (
     compute,
     recent_events,
     snapshot,
+    stoch_direction,
 )
 from tss.realtime.symbols import live_symbols
 
@@ -126,6 +127,15 @@ def compute_symbol(
                 "zone_position": snap.zone_position,
                 "price_vs_vwap": snap.price_vs_vwap,
                 "computed_at": now,
+                "htf_dir": snap.htf_dir,
+                "long_score": snap.long_score,
+                "short_score": snap.short_score,
+                "long_factors": snap.long_factors,
+                "short_factors": snap.short_factors,
+                "entry_long": snap.entry_long,
+                "entry_short": snap.entry_short,
+                # 5m StochRSI K vs D, the final gate of the 15m entry (5m rows only)
+                "stoch_dir": stoch_direction(bars.close, params) if tf == "5m" else None,
             }
         )
         for close_time, event, _ in recent_events(bars, result, delta, EVENT_LOOKBACK):
@@ -170,6 +180,7 @@ class SignalAgent(BaseAgent):
     def __init__(self, deps: Any) -> None:
         super().__init__(deps)
         self._cache = BarCache()
+        self._params = FgiParams(min_other=deps.config.thresholds.signals.min_other_factors)
         self._computed: dict[tuple[str, str], datetime] = {}
 
     async def _ensure(self, symbol: str, tf: str, now: datetime) -> None:
@@ -227,6 +238,7 @@ class SignalAgent(BaseAgent):
                     {tf: self._cache.get(s, tf) for tf in TIMEFRAMES},
                     now,
                     {tf: self._computed[(s, tf)] for tf in SIGNAL_TFS if (s, tf) in self._computed},
+                    self._params,
                 )
                 for s in symbols
                 if s not in failed

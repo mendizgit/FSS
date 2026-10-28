@@ -1,0 +1,462 @@
+// ════════════════════════════════════════════════════════════════════════════
+// FGI Pro Strategy v2.0 | High Win Rate Multi-Confluence System
+// Combines: 4H SuperTrend + MTF RSI + Bollinger Bands + S/R Zones +
+//           RSI Divergence + Sweep & Engulf + ADX Trend Strength
+// Target: 75–80% Win Rate | Works on 15m / 1H / 4H
+// ════════════════════════════════════════════════════════════════════════════
+//@version=5
+strategy("FGI Pro Strategy v2.0 | High WR",
+     overlay              = true,
+     initial_capital      = 10000,
+     default_qty_type     = strategy.cash,
+     default_qty_value    = 5000,
+     commission_type      = strategy.commission.percent,
+     commission_value     = 0.06,
+     slippage             = 2,
+     max_labels_count     = 300,
+     max_lines_count      = 100,
+     max_boxes_count      = 50)
+
+// ════════════════════════════════════════════════════════════════════════════
+// ▸ INPUTS
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Trend ──────────────────────────────────────────────────────────────────
+grpT = "🔹 Trend Filters"
+htfTF   = input.timeframe("240", "HTF SuperTrend Timeframe",  group=grpT)
+stMult  = input.float(3.0,  "SuperTrend Multiplier",  step=0.1, group=grpT)
+stLen   = input.int(10,     "SuperTrend ATR Length",           group=grpT)
+e9Len   = input.int(9,      "EMA Fast Length",                 group=grpT)
+e21Len  = input.int(21,     "EMA Slow Length",                 group=grpT)
+e32Len  = input.int(32,     "EMA 32 (Dynamic S/R)",            group=grpT)
+adxLen  = input.int(14,     "ADX Length (Trend Strength)",     group=grpT)
+adxMin  = input.int(30,     "Min ADX (filter ranging mkt)",    group=grpT)
+
+// ── MTF RSI ────────────────────────────────────────────────────────────────
+grpR = "🔹 MTF RSI"
+rsiLen  = input.int(14,     "RSI Length",         group=grpR)
+tf1h    = input.timeframe("60",  "RSI TF1 (1H)", group=grpR)
+tf4h    = input.timeframe("240", "RSI TF2 (4H)", group=grpR)
+rsiObL  = input.float(65,   "RSI Overbought",     group=grpR)
+rsiOsL  = input.float(35,   "RSI Oversold",       group=grpR)
+
+// ── Entry Setup ────────────────────────────────────────────────────────────
+grpE = "🔹 Entry Setup"
+bbLen   = input.int(20,     "BB Length",               group=grpE)
+bbDev   = input.float(2.0,  "BB StdDev",  step=0.1,    group=grpE)
+swLen   = input.int(7,      "Swing Lookback",           group=grpE, minval=3, maxval=15)
+divLen  = input.int(3,      "Divergence Pivot Length",  group=grpE, minval=3, maxval=10)
+srBuf   = input.float(0.8,  "S/R Buffer (ATR mult)",    group=grpE, step=0.1)
+minSc   = input.int(4,      "Min Confluence Score (/6)",group=grpE, minval=3, maxval=6,
+         tooltip="Minimum score out of 6 factors to trigger an entry. Higher = fewer but better trades.")
+
+// ── Risk Management ────────────────────────────────────────────────────────
+grpRk = "🔹 Risk Management"
+atrLen  = input.int(14,     "ATR Length",               group=grpRk)
+slMult  = input.float(1.5,  "Stop Loss (ATR ×)",   step=0.1, group=grpRk)
+tp1Mult = input.float(1.5,  "TP1 (ATR ×) — 50%",   step=0.1, group=grpRk)
+tp2Mult = input.float(3.5,  "TP2 (ATR ×) — 50%",   step=0.1, group=grpRk)
+moveBE  = input.bool(true,  "Move SL to B/E after TP1",       group=grpRk)
+
+// ── Visuals ─────────────────────────────────────────────────────────────────
+grpV = "🔹 Visuals"
+showBG      = input.bool(true,  "Background (HTF trend)",  group=grpV)
+showTable   = input.bool(true,  "Dashboard Table",          group=grpV)
+showST      = input.bool(true,  "Show SuperTrends",         group=grpV)
+showEMAs    = input.bool(true,  "Show EMAs",                group=grpV)
+showBB      = input.bool(true,  "Show Bollinger Bands",     group=grpV)
+
+// ════════════════════════════════════════════════════════════════════════════
+// ▸ CORE CALCULATIONS
+// ════════════════════════════════════════════════════════════════════════════
+
+atr = ta.atr(atrLen)
+
+// ── Higher Timeframe SuperTrend (main trend bias) ──────────────────────────
+[stHTF, dirHTF] = request.security(syminfo.tickerid, htfTF,
+     ta.supertrend(stMult, stLen), gaps=barmerge.gaps_off)
+htfBull = dirHTF < 0
+htfBear = dirHTF > 0
+
+// ── Local SuperTrend (entry timing) ───────────────────────────────────────
+[stLoc, dirLoc] = ta.supertrend(stMult, stLen)
+locBull = dirLoc < 0
+locBear = dirLoc > 0
+
+// ── EMAs ──────────────────────────────────────────────────────────────────
+e9  = ta.ema(close, e9Len)
+e21 = ta.ema(close, e21Len)
+e32 = ta.ema(close, e32Len)
+
+// ── Bollinger Bands ────────────────────────────────────────────────────────
+[bbMid, bbUp, bbDn] = ta.bb(close, bbLen, bbDev)
+
+// ── MTF RSI ────────────────────────────────────────────────────────────────
+rsi1h  = request.security(syminfo.tickerid, tf1h,
+     ta.rsi(close, rsiLen), gaps=barmerge.gaps_off)
+rsi4h  = request.security(syminfo.tickerid, tf4h,
+     ta.rsi(close, rsiLen), gaps=barmerge.gaps_off)
+rsiLoc = ta.rsi(close, rsiLen)
+
+// ── ADX (Trend Strength Filter) ────────────────────────────────────────────
+[adxVal, diPlus, diMinus] = ta.dmi(adxLen, adxLen)
+inTrend = adxVal >= adxMin
+
+// ── Swing Highs / Lows ─────────────────────────────────────────────────────
+pivH = ta.pivothigh(high, swLen, swLen)
+pivL = ta.pivotlow (low,  swLen, swLen)
+
+var float lastSH = na
+var float lastSL = na
+
+if not na(pivH)
+    lastSH := high[swLen]
+if not na(pivL)
+    lastSL := low[swLen]
+
+// ════════════════════════════════════════════════════════════════════════════
+// ▸ FACTOR 1 — SWEEP & ENGULF PATTERN
+//   Bull: candle wicks below prev low then closes above prev high
+//   Bear: candle wicks above prev high then closes below prev low
+// ════════════════════════════════════════════════════════════════════════════
+
+sweepBull = low < low[1] and close > high[1] and close > open
+sweepBear = high > high[1] and close < low[1] and close < open
+
+var bool recSweepBull = false
+var bool recSweepBear = false
+var int  sBullBar = 0
+var int  sBearBar = 0
+
+if sweepBull
+    recSweepBull := true
+    sBullBar     := bar_index
+if sweepBear
+    recSweepBear := true
+    sBearBar     := bar_index
+if (bar_index - sBullBar) > 5
+    recSweepBull := false
+if (bar_index - sBearBar) > 5
+    recSweepBear := false
+
+// ════════════════════════════════════════════════════════════════════════════
+// ▸ FACTOR 2 — RSI DIVERGENCE
+//   Regular Bull: Price lower low, RSI higher low (< 50)
+//   Regular Bear: Price higher high, RSI lower high (> 50)
+// ════════════════════════════════════════════════════════════════════════════
+
+divPivH = ta.pivothigh(rsiLoc, divLen, divLen)
+divPivL = ta.pivotlow (rsiLoc, divLen, divLen)
+
+var float pRH = na   // prev RSI high
+var float pPH = na   // prev price high
+var float cRH = na   // curr RSI high
+var float cPH = na   // curr price high
+var float pRL = na
+var float pPL = na
+var float cRL = na
+var float cPL = na
+var int   cRHBar = na
+var int   cRLBar = na
+var int   pRHBar = na
+var int   pRLBar = na
+
+if not na(divPivH)
+    pRH := cRH
+    pPH := cPH
+    pRHBar := cRHBar
+    cRH := rsiLoc[divLen]
+    cPH := high[divLen]
+    cRHBar := bar_index - divLen
+if not na(divPivL)
+    pRL := cRL
+    pPL := cPL
+    pRLBar := cRLBar
+    cRL := rsiLoc[divLen]
+    cPL := low[divLen]
+    cRLBar := bar_index - divLen
+
+bullDiv = not na(pRL) and not na(cRL) and cPL < pPL and cRL > pRL and cRL < 50
+bearDiv = not na(pRH) and not na(cRH) and cPH > pPH and cRH < pRH and cRH > 50
+
+var bool recBullDiv = false
+var bool recBearDiv = false
+var int  bdBar = 0
+var int  brBar = 0
+
+if bullDiv
+    recBullDiv := true
+    bdBar := bar_index
+if bearDiv
+    recBearDiv := true
+    brBar := bar_index
+if (bar_index - bdBar) > 20
+    recBullDiv := false
+if (bar_index - brBar) > 20
+    recBearDiv := false
+
+// ════════════════════════════════════════════════════════════════════════════
+// ▸ FACTOR 3 — ENTRY ZONE
+//   Price must be at a meaningful level: BB extreme OR swing S/R
+// ════════════════════════════════════════════════════════════════════════════
+
+atSup = low <= bbDn or
+     (not na(lastSL) and low <= lastSL + atr * srBuf and close >= lastSL - atr * 0.5)
+
+atRes = high >= bbUp or
+     (not na(lastSH) and high >= lastSH - atr * srBuf and close <= lastSH + atr * 0.5)
+
+nearEMA32 = math.abs(close - e32) <= atr * 0.6
+
+// ════════════════════════════════════════════════════════════════════════════
+// ▸ CONFLUENCE SCORING  (max 6 per side)
+// ════════════════════════════════════════════════════════════════════════════
+//
+//  #  Factor              Long                    Short
+//  1  HTF Trend           HTF ST bullish           HTF ST bearish
+//  2  Local ST            Local ST bullish         Local ST bearish
+//  3  MTF RSI             1H>45 AND 4H>45          1H<55 AND 4H<55
+//  4  Entry Zone          At support / EMA32       At resistance / EMA32
+//  5  RSI Divergence      Recent bull divergence   Recent bear divergence
+//  6  Sweep & Engulf      Recent bull sweep        Recent bear sweep
+//
+// ════════════════════════════════════════════════════════════════════════════
+
+lF1 = htfBull ? 1 : 0
+lF2 = locBull ? 1 : 0
+lF3 = rsi1h > 45 and rsi4h > 45 ? 1 : 0
+lF4 = atSup or nearEMA32 ? 1 : 0
+lF5 = recBullDiv ? 1 : 0
+lF6 = recSweepBull ? 1 : 0
+lScore = lF1 + lF2 + lF3 + lF4 + lF5 + lF6
+
+sF1 = htfBear ? 1 : 0
+sF2 = locBear ? 1 : 0
+sF3 = rsi1h < 55 and rsi4h < 55 ? 1 : 0
+sF4 = atRes or nearEMA32 ? 1 : 0
+sF5 = recBearDiv ? 1 : 0
+sF6 = recSweepBear ? 1 : 0
+sScore = sF1 + sF2 + sF3 + sF4 + sF5 + sF6
+
+// ════════════════════════════════════════════════════════════════════════════
+// ▸ ENTRY CONDITIONS
+//   Mandatory: HTF trend + Local ST alignment + ADX trending + no open pos
+// ════════════════════════════════════════════════════════════════════════════
+
+noPos      = strategy.position_size == 0
+longCond   = lScore >= minSc and htfBull and locBull and inTrend and noPos
+shortCond  = sScore >= minSc and htfBear and locBear and inTrend and noPos
+
+// ════════════════════════════════════════════════════════════════════════════
+// ▸ RISK MANAGEMENT LEVELS
+// ════════════════════════════════════════════════════════════════════════════
+
+// SL: structure-based (swing level) with ATR minimum
+longSLSwing  = not na(lastSL) ? lastSL - atr * 0.2 : na
+longSL       = not na(longSLSwing) ? math.min(longSLSwing, close - atr * slMult) : close - atr * slMult
+
+shortSLSwing = not na(lastSH) ? lastSH + atr * 0.2 : na
+shortSL      = not na(shortSLSwing) ? math.max(shortSLSwing, close + atr * slMult) : close + atr * slMult
+
+longTP1  = close + atr * tp1Mult
+longTP2  = close + atr * tp2Mult
+shortTP1 = close - atr * tp1Mult
+shortTP2 = close - atr * tp2Mult
+
+// Persist entry levels across bars for breakeven management
+var float activeLongSL  = na
+var float activeLongTP1 = na
+var float activeShortSL = na
+var float activeShortTP1 = na
+var bool  longBEMoved   = false
+var bool  shortBEMoved  = false
+
+// ════════════════════════════════════════════════════════════════════════════
+// ▸ EXECUTION
+// ════════════════════════════════════════════════════════════════════════════
+
+if longCond
+    strategy.entry("Long", strategy.long, comment="L" + str.tostring(lScore) + "/6")
+    strategy.exit("Long TP1", "Long", qty_percent=50, limit=longTP1, stop=longSL)
+    strategy.exit("Long TP2", "Long", qty_percent=100, limit=longTP2, stop=longSL)
+    activeLongSL   := longSL
+    activeLongTP1  := longTP1
+    longBEMoved    := false
+
+if shortCond
+    strategy.entry("Short", strategy.short, comment="S" + str.tostring(sScore) + "/6")
+    strategy.exit("Short TP1", "Short", qty_percent=50, limit=shortTP1, stop=shortSL)
+    strategy.exit("Short TP2", "Short", qty_percent=100, limit=shortTP2, stop=shortSL)
+    activeShortSL  := shortSL
+    activeShortTP1 := shortTP1
+    shortBEMoved   := false
+
+// Move SL to breakeven after TP1 is hit
+if moveBE and strategy.position_size > 0 and not longBEMoved
+    if high >= activeLongTP1
+        strategy.exit("Long BE", "Long", stop=strategy.position_avg_price + atr * 0.1)
+        longBEMoved := true
+
+if moveBE and strategy.position_size < 0 and not shortBEMoved
+    if low <= activeShortTP1
+        strategy.exit("Short BE", "Short", stop=strategy.position_avg_price - atr * 0.1)
+        shortBEMoved := true
+
+// Hard close on HTF trend flip (capital protection)
+if strategy.position_size > 0 and htfBear
+    strategy.close("Long", comment="Trend Flip")
+    activeLongSL  := na
+    longBEMoved   := false
+
+if strategy.position_size < 0 and htfBull
+    strategy.close("Short", comment="Trend Flip")
+    activeShortSL := na
+    shortBEMoved  := false
+
+// ════════════════════════════════════════════════════════════════════════════
+// ▸ VISUALS
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── SuperTrends ─────────────────────────────────────────────────────────────
+plot(showST ? stHTF : na, "HTF SuperTrend",
+     dirHTF < 0 ? color.new(color.green, 10) : color.new(color.red, 10), 3)
+plot(showST ? stLoc : na, "Local SuperTrend",
+     dirLoc < 0 ? color.new(color.aqua, 40) : color.new(color.orange, 40), 2)
+
+// ── EMAs ─────────────────────────────────────────────────────────────────────
+plot(showEMAs ? e9  : na, "EMA 9",  color.new(color.yellow, 30), 1)
+plot(showEMAs ? e21 : na, "EMA 21", color.new(color.orange, 30), 1)
+plot(showEMAs ? e32 : na, "EMA 32", color.white,                 2)
+
+// ── Bollinger Bands ──────────────────────────────────────────────────────────
+bbUp_p = plot(showBB ? bbUp : na, "BB Upper", color.new(color.gray, 55), 1)
+bbDn_p = plot(showBB ? bbDn : na, "BB Lower", color.new(color.gray, 55), 1)
+plot(showBB ? bbMid : na, "BB Mid", color.new(color.yellow, 70), 1, plot.style_circles)
+fill(bbUp_p, bbDn_p, color.new(color.gray, 93))
+
+// ── Entry Signals ────────────────────────────────────────────────────────────
+plotshape(longCond, "LONG Signal",
+     shape.labelup, location.belowbar,
+     color.new(color.lime, 0),
+     text="▲ LONG",
+     textcolor=color.black, size=size.small)
+
+plotshape(shortCond, "SHORT Signal",
+     shape.labeldown, location.abovebar,
+     color.new(color.red, 0),
+     text="▼ SHORT",
+     textcolor=color.white, size=size.small)
+
+// ── Sweep & Engulf markers ───────────────────────────────────────────────────
+plotshape(sweepBull, "Sweep ▲",
+     shape.triangleup, location.belowbar,
+     color.new(color.teal, 40), size=size.tiny)
+plotshape(sweepBear, "Sweep ▼",
+     shape.triangledown, location.abovebar,
+     color.new(color.maroon, 40), size=size.tiny)
+
+// ── RSI Divergence markers ───────────────────────────────────────────────────
+plotshape(bullDiv, "Bull Div",
+     shape.diamond, location.belowbar,
+     color.new(color.green, 20), size=size.tiny)
+plotshape(bearDiv, "Bear Div",
+     shape.diamond, location.abovebar,
+     color.new(color.red, 20), size=size.tiny)
+
+// ── Background (HTF trend) ───────────────────────────────────────────────────
+bgcolor(showBG ? (htfBull ? color.new(color.green, 96) : color.new(color.red, 96)) : na)
+
+// ── Swing S/R step lines ─────────────────────────────────────────────────────
+plot(not na(lastSH) ? lastSH : na, "Swing Resistance",
+     color.new(color.red,   50), 1, plot.style_stepline)
+plot(not na(lastSL) ? lastSL : na, "Swing Support",
+     color.new(color.green, 50), 1, plot.style_stepline)
+
+// ════════════════════════════════════════════════════════════════════════════
+// ▸ DASHBOARD TABLE
+// ════════════════════════════════════════════════════════════════════════════
+
+if showTable and barstate.islast
+    var table dash = table.new(position.top_right, 2, 12,
+         bgcolor=color.new(color.black, 72),
+         border_width=1, border_color=color.new(color.gray, 60),
+         frame_color=color.new(color.blue, 40), frame_width=1)
+
+    // Header
+    table.cell(dash, 0, 0, "FGI Pro v2.0", text_color=color.white,
+         bgcolor=color.new(color.navy, 20), text_size=size.small)
+    table.cell(dash, 1, 0, syminfo.ticker + " " + timeframe.period + "m",
+         text_color=color.yellow, bgcolor=color.new(color.navy, 20), text_size=size.small)
+
+    // HTF Trend
+    table.cell(dash, 0, 1, "HTF Trend",    text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 1, htfBull ? "▲ BULL" : "▼ BEAR",
+         text_color=htfBull ? color.lime : color.red, text_size=size.small)
+
+    // Local ST
+    table.cell(dash, 0, 2, "Local ST",     text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 2, locBull ? "▲ BULL" : "▼ BEAR",
+         text_color=locBull ? color.lime : color.red, text_size=size.small)
+
+    // ADX
+    table.cell(dash, 0, 3, "ADX",          text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 3, str.tostring(math.round(adxVal, 1)) + (inTrend ? " ✓" : " ✗"),
+         text_color=inTrend ? color.lime : color.orange, text_size=size.small)
+
+    // RSI 1H
+    table.cell(dash, 0, 4, "RSI 1H",       text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 4, str.tostring(math.round(rsi1h, 1)),
+         text_color=rsi1h > 50 ? color.lime : color.red, text_size=size.small)
+
+    // RSI 4H
+    table.cell(dash, 0, 5, "RSI 4H",       text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 5, str.tostring(math.round(rsi4h, 1)),
+         text_color=rsi4h > 50 ? color.lime : color.red, text_size=size.small)
+
+    // Bull Div
+    table.cell(dash, 0, 6, "Bull Div",     text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 6, recBullDiv ? "✓ Active" : "—",
+         text_color=recBullDiv ? color.lime : color.gray, text_size=size.small)
+
+    // Bear Div
+    table.cell(dash, 0, 7, "Bear Div",     text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 7, recBearDiv ? "✓ Active" : "—",
+         text_color=recBearDiv ? color.red : color.gray, text_size=size.small)
+
+    // Long Score
+    lBg = lScore >= minSc ? color.new(color.green, 60) : color.new(color.black, 50)
+    table.cell(dash, 0, 8, "Long Score",   text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 8, str.tostring(lScore) + "/6",
+         text_color=lScore >= minSc ? color.lime : color.gray,
+         bgcolor=lBg, text_size=size.small)
+
+    // Short Score
+    sBg = sScore >= minSc ? color.new(color.red, 60) : color.new(color.black, 50)
+    table.cell(dash, 0, 9, "Short Score",  text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 9, str.tostring(sScore) + "/6",
+         text_color=sScore >= minSc ? color.red : color.gray,
+         bgcolor=sBg, text_size=size.small)
+
+    // Position
+    posStr  = strategy.position_size > 0 ? "▲ LONG" : strategy.position_size < 0 ? "▼ SHORT" : "FLAT"
+    posCol  = strategy.position_size > 0 ? color.lime : strategy.position_size < 0 ? color.red : color.gray
+    table.cell(dash, 0, 10, "Position",    text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 10, posStr,        text_color=posCol,       text_size=size.small)
+
+    // P&L
+    table.cell(dash, 0, 11, "Net P&L",     text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 11, "$" + str.tostring(math.round(strategy.netprofit, 0)),
+         text_color=strategy.netprofit >= 0 ? color.lime : color.red, text_size=size.small)
+
+// ════════════════════════════════════════════════════════════════════════════
+// ▸ ALERT CONDITIONS
+// ════════════════════════════════════════════════════════════════════════════
+
+alertcondition(longCond,  "FGI Long Entry",
+     "FGI Pro: LONG signal on {{ticker}}")
+alertcondition(shortCond, "FGI Short Entry",
+     "FGI Pro: SHORT signal on {{ticker}}")
+alertcondition(strategy.position_size > 0 and htfBear, "FGI Long Trend Flip Exit",
+     "FGI Pro: LONG closed — HTF trend flipped BEAR on {{ticker}}")
+alertcondition(strategy.position_size < 0 and htfBull, "FGI Short Trend Flip Exit",
+     "FGI Pro: SHORT closed — HTF trend flipped BULL on {{ticker}}")

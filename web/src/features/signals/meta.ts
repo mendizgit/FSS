@@ -28,7 +28,7 @@ export const ZONE_LABEL: Record<string, { text: string; tone: "up" | "down" | "m
 export const TF_MINUTES: Record<string, number> = { "5m": 5, "15m": 15, "1h": 60 };
 
 /** "Fresh" window per timeframe, in bars: 5m 0-5, 15m 0-2 (the 1h row is not badged). The Long / Short
- * setup itself is decided by the backend (domain/setups.py) and arrives as `setup` in the API. */
+ * entry itself is decided by the backend (domain/setups.py) and arrives as `setup` in the API. */
 export const FRESH_MAX_BARS: Record<string, number> = { "5m": 5, "15m": 2 };
 export function isFresh(row: SignalRow): boolean {
   const max = FRESH_MAX_BARS[row.timeframe];

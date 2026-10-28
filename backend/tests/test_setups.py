@@ -1,70 +1,75 @@
-"""Long / Short setup rule (domain/setups.py): pure, no database."""
+"""15m entry signal rule (domain/setups.py): pure, no database."""
 
 from datetime import UTC, datetime, timedelta
 
 from tss.domain.setups import EventRef, TfView, classify, recent_events
 
-T = datetime(2026, 10, 7, 10, 0, tzinfo=UTC)
+T15 = datetime(2026, 10, 7, 10, 0, tzinfo=UTC)  # close of the 15m bar
+T5 = T15 + timedelta(minutes=5)  # a newer 5m bar
 
 
-def view(tf: str, trend: str, *events: tuple[str, int, bool | None]) -> TfView:
-    return TfView(tf, T, trend, tuple(EventRef(e, ago, against) for e, ago, against in events))
+def base(**kw: object) -> TfView:
+    fields: dict[str, object] = {
+        "entry_long": True,
+        "entry_short": False,
+        "long_score": 4,
+        "short_score": 1,
+        "long_factors": "ST,1H,EMA,DIV",
+        "short_factors": "SWP",
+        "htf_dir": -1,
+    }
+    return TfView("15m", T15, "UP", (), **{**fields, **kw})  # type: ignore[arg-type]
 
 
-def test_long_needs_1h_confirmation_and_a_fresh_lower_timeframe_event() -> None:
-    views = [
-        view("5m", "UP", ("BULL_T", 2, False)),
-        view("15m", "UP"),
-        view("1h", "UP", ("BUY", 7, None)),
-    ]
-    s = classify(views)
-    assert s is not None and s.bias == "long"
-    assert (s.trigger_timeframe, s.trigger_event, s.trigger_bars_ago) == ("5m", "BULL_T", 2)
-    assert (s.htf_event, s.htf_bars_ago, s.minutes_ago) == ("BUY", 7, 10)
-    assert s.trigger_bar_close_time == T - timedelta(minutes=10)
+def stoch(direction: int, at: datetime = T5) -> TfView:
+    return TfView("5m", at, "UP", (), stoch_dir=direction)
+
+
+def test_long_needs_base_entry_and_5m_stoch_agreement() -> None:
+    s = classify([base(), stoch(1)])
+    assert s is not None and s.bias == "long" and s.trigger_timeframe == "15m"
+    assert (s.score, s.factors, s.minutes_ago) == (4, "ST,1H,EMA,DIV", 5)
+    assert s.trigger_bar_close_time == T15
+    assert classify([base(), stoch(-1)]) is None  # K below D blocks a long
+    assert classify([base(), stoch(0)]) is None
+    assert classify([base(entry_long=False), stoch(1)]) is None  # SAR / score not met
 
 
 def test_short_is_the_mirror() -> None:
-    s = classify([view("15m", "DOWN", ("SELL", 1, True)), view("1h", "DOWN", ("BEAR_T", 0, None))])
-    assert s is not None and s.bias == "short" and s.trigger_timeframe == "15m"
-    assert s.against_htf is True  # reported, not used as a filter
+    short = base(entry_long=False, entry_short=True, short_score=3, short_factors="1H,EMA,SWP")
+    s = classify([short, stoch(-1)])
+    assert s is not None and s.bias == "short" and s.score == 3
+    assert classify([short, stoch(1)]) is None
 
 
-def test_windows_are_inclusive_and_exclusive_as_specified() -> None:
-    htf = view("1h", "UP", ("BULL_T", 10, False))
-    assert classify([view("5m", "UP", ("BUY", 5, False)), htf]) is not None  # 5m: 0-5 bars
-    assert classify([view("5m", "UP", ("BUY", 6, False)), htf]) is None
-    assert classify([view("15m", "UP", ("BUY", 2, False)), htf]) is not None  # 15m: 0-2 bars
-    assert classify([view("15m", "UP", ("BUY", 3, False)), htf]) is None
-    stale_htf = view("1h", "UP", ("BULL_T", 11, False))  # 1h: 0-10 bars
-    assert classify([view("5m", "UP", ("BUY", 0, False)), stale_htf]) is None
+def test_4h_trend_is_reported_never_a_filter() -> None:
+    assert classify([base(htf_dir=-1), stoch(1)]).against_htf is False  # type: ignore[union-attr]
+    assert classify([base(htf_dir=1), stoch(1)]).against_htf is True  # type: ignore[union-attr]
+    assert classify([base(htf_dir=0), stoch(1)]).against_htf is None  # type: ignore[union-attr]
+    short = base(entry_long=False, entry_short=True, htf_dir=1)
+    assert classify([short, stoch(-1)]).against_htf is False  # type: ignore[union-attr]
 
 
-def test_trend_and_event_direction_must_agree() -> None:
-    htf = view("1h", "UP", ("BULL_T", 1, False))
-    assert classify([view("5m", "DOWN", ("BUY", 0, False)), htf]) is None  # trend not Up
-    assert classify([view("5m", "UP", ("SELL", 0, False)), htf]) is None  # bearish event
-    assert (
-        classify([view("5m", "UP", ("BUY", 0, False)), view("1h", "DOWN", ("BULL_T", 1, False))])
-        is None
-    )
-    assert classify([view("5m", "UP", ("TD_BULL", 0, False)), htf]) is None  # TD is not a trigger
+def test_rows_out_of_step_or_missing_give_no_entry() -> None:
+    assert classify([base()]) is None  # no 5m row
+    assert classify([stoch(1)]) is None  # no 15m row
+    assert classify([base(), stoch(1, T15 - timedelta(minutes=5))]) is None  # 5m older than 15m
+    assert classify([base(), stoch(1, T15 + timedelta(minutes=20))]) is None  # 15m row stale
+    assert classify([base(), stoch(1, T15 + timedelta(minutes=15))]) is not None
 
 
-def test_fresher_trigger_wins_and_conflict_is_neutral() -> None:
-    htf = view("1h", "UP", ("BULL_T", 1, False))
-    s = classify([view("5m", "UP", ("BUY", 4, False)), view("15m", "UP", ("BUY", 0, True)), htf])
-    assert s is not None and s.trigger_timeframe == "15m"  # 0 min beats 20 min
-    # both a long and a short qualify (cannot happen with one 1h trend, but the rule is explicit)
-    assert classify([view("5m", "UP"), htf]) is None
+def test_both_sides_true_is_a_conflict() -> None:
+    both = base(entry_short=True)
+    assert classify([both, stoch(1)]) is not None  # stoch picks one side only
+    assert classify([base(entry_long=True, entry_short=True), stoch(0)]) is None
 
 
-def test_recent_events_merges_the_rows_own_newest_event() -> None:
-    five = timedelta(minutes=5)
-    stored = [("BUY", T - 3 * five, False)]
-    refs = recent_events(T, "5m", stored, "BULL_T", 1, True)
-    assert [(r.event, r.bars_ago) for r in refs] == [("BULL_T", 1), ("BUY", 3)]
-    # already stored: not duplicated; TD events and far-away events are ignored
-    assert len(recent_events(T, "5m", stored, "BUY", 3, False)) == 1
-    assert recent_events(T, "5m", [], "TD_BULL", 0, None) == ()
-    assert recent_events(T, "5m", [("BUY", T - 30 * five, None)], "NONE", None, None) == ()
+def test_pre_v3_rows_have_no_entry() -> None:
+    legacy = TfView("15m", T15, "UP", ())
+    assert classify([legacy, stoch(1)]) is None
+
+
+def test_recent_events_merges_the_newest_event() -> None:
+    stored = [("BUY", T15 - timedelta(minutes=30), False)]
+    refs = recent_events(T15, "15m", stored, "BULL_T", 0, True)
+    assert refs == (EventRef("BULL_T", 0, True), EventRef("BUY", 2, False))

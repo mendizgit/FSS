@@ -7,6 +7,34 @@ universe:
 signals:
   # Always computed and shown on the dashboard's "Majors" tab (must be active USDT perpetuals).
   majors: [BTC_USDT, ETH_USDT, SOL_USDT, XRP_USDT]
+  min_other_factors: 2              # 15m entry: factors needed besides the mandatory 1H M trend (of 4: ST, EMA, DIV, SWP)
+  alert_cooldown_minutes: 30        # one entry alert per symbol and side within this window
+paper:                              # dummy-money test of the 15m entry alerts (no real orders)
+  enabled: false
+  start_balance_usdt: 500
+  leverage: 10
+  margin_per_trade_usdt: 50         # notional = margin x leverage = 500 USDT per trade
+  stop_pct: 1.0                     # stop-loss: 1 % against the entry price
+  reward_risk: 2.0                  # target = 2R
+  timeout_minutes: 240              # close at market after 4 h (no early close on signal invalid)
+  fee_pct: 0.02                     # per side
+  slippage_pct: 0.02                # per side
+paper_fgi:                          # forward test of the FGI Pro strategy (15m, its own exits)
+  enabled: true
+  pool_size: 80                     # top USDT perpetuals by 24h turnover (denylist applied)
+  start_balance_usdt: 500
+  leverage: 10
+  margin_per_trade_usdt: 50         # notional = margin x leverage = 500 USDT per trade
+  max_open: 10
+  min_score: 4                      # of 6 confluence factors
+  adx_min: 35
+  use_4h: true                      # trend = 4H SuperTrend and the 1H SuperTrend must agree (false: 1H only)
+  stop_cap_pct: 2.0                 # stop never wider than 2 % from the entry
+  tp1_atr: 1.5                      # TP1 closes tp1_fraction at 1.5 ATR, stop then moves to break-even
+  tp2_atr: 3.5
+  tp1_fraction: 0.5
+  fee_pct: 0.02                     # per side
+  slippage_pct: 0.02                # per side
 liquidity:
   min_turnover_24h_usdt: 1000000
   min_oi_notional_usdt: 500000
@@ -35,7 +63,7 @@ control:
   breaker_failures: 3
   breaker_cooldown_s: 900
 quiet_hours:                        # daily pause of snapshot/pipeline/signal/news jobs, IST wall clock
-  pause_hour_ist: 0                 # 00:00 IST = 18:30 UTC
-  resume_hour_ist: 5                # 05:00 IST = 23:30 UTC
+  pause_hour_ist: 0                 # equal hours = no daily pause (24/7); was 0 -> 5 (00:00-05:00)
+  resume_hour_ist: 0                # 2026-10-29: pause lifted by the user
 mexc:
   max_requests_per_second: 5        # † conservative; adjust after preflight

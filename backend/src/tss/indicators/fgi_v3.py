@@ -4,8 +4,9 @@
 (used by the parity check and the event scan). `snapshot` reads the newest bar into the values
 stored in `signals`.
 
-Higher-timeframe values (4H SuperTrend, 1H / 4H RSI) come from the last CLOSED higher-timeframe
-bar at each bar's close: a documented deviation from live `request.security`, which repaints.
+Higher-timeframe values (4H SuperTrend direction, 1H range-filter M trend) come from the last
+CLOSED higher-timeframe bar at each bar's close: a documented deviation from live
+`request.security`, which repaints.
 """
 
 from __future__ import annotations
@@ -19,14 +20,13 @@ from tss.indicators.primitives import (
     NAN,
     Series,
     atr,
-    bollinger,
     ema,
     highest,
     isnan,
     lowest,
-    pivot_high,
-    pivot_low,
     rsi,
+    sar,
+    stoch_rsi,
     vwap_daily,
 )
 from tss.indicators.range_filter import RangeFilterParams, range_filter
@@ -44,29 +44,24 @@ class FgiParams:
     gate_bars: int = 20
     buy_os: float = 30.0
     sell_ob: float = 70.0
-    ema1: int = 9
-    ema2: int = 21
+    ema1: int = 6
+    ema2: int = 24
     ema3: int = 32
-    st_mult: float = 3.0
-    st_len: int = 10
+    st_mult: float = 2.168
+    st_len: int = 8
     g_rsi_len: int = 14
-    g_rsi_long: float = 45.0
-    g_rsi_short: float = 55.0
-    g_bb_len: int = 20
-    g_bb_dev: float = 2.0
-    g_sw_len: int = 7
-    g_atr_len: int = 14
-    g_sr_buf: float = 0.8
-    g_ema_near: float = 0.6
     g_div_len: int = 3
-    grade_a: int = 5
-    grade_b: int = 4
+    min_other: int = 2  # entry: factors needed besides the mandatory 1H M trend (of 4)
+    sar_start: float = 0.02
+    sar_inc: float = 0.02
+    sar_max: float = 0.2
+    sr_rsi_len: int = 14
+    sr_stoch_len: int = 14
+    sr_k: int = 3
+    sr_d: int = 3
     l1_in: float = 0.025
     l1_rsi_r: float = 60.8
     l1_rsi_s: float = 36.0
-    l2_ext: float = 0.35
-    l2_open: float = 0.06
-    l2_new: float = 0.0
     div: DivParams = field(default_factory=DivParams)
     zone: ZoneParams = field(default_factory=ZoneParams)
 
@@ -88,11 +83,10 @@ class Bars:
 
 @dataclass(frozen=True)
 class HtfContext:
-    """Higher-timeframe values aligned to each signal bar (NaN / 0 until a closed bar exists)."""
+    """Higher-timeframe values aligned to each signal bar (0 until a closed bar exists)."""
 
     htf_dir: list[int]  # SuperTrend direction of the 4H series: -1 bull, 1 bear, 0 unknown
-    rsi_tf1: Series  # RSI of the 1H series
-    rsi_tf2: Series  # RSI of the 4H series
+    com_trend: list[int]  # range-filter M trend of the 1H series: 1 up, -1 down, 0 unknown
 
 
 def align(
@@ -126,15 +120,14 @@ def build_htf_context(
     atr4 = atr(bars_4h.high, bars_4h.low, bars_4h.close, p.st_len)
     # a direction is only meaningful once its ATR exists (Pine: na until warmed up)
     dir4_f = [float(d) if not isnan(a) else NAN for d, a in zip(dir4, atr4, strict=True)]
-    rsi1 = rsi(bars_1h.close, p.g_rsi_len)
-    rsi2 = rsi(bars_4h.close, p.g_rsi_len)
+    com = range_filter(bars_1h.high, bars_1h.low, bars_1h.close, p.rf).trend
     d4 = timedelta(hours=4)
     d1 = timedelta(hours=1)
     htf_dir = align(close_times, bars_4h.open_time, d4, dir4_f)
+    com_trend = align(close_times, bars_1h.open_time, d1, [float(t) for t in com], 0.0)
     return HtfContext(
         htf_dir=[0 if isnan(d) else int(d) for d in htf_dir],
-        rsi_tf1=align(close_times, bars_1h.open_time, d1, rsi1),
-        rsi_tf2=align(close_times, bars_4h.open_time, d4, rsi2),
+        com_trend=[int(t) for t in com_trend],
     )
 
 
@@ -164,6 +157,11 @@ class FgiSeries:
     s_letter: list[bool]
     long_score: list[int]
     short_score: list[int]
+    long_factors: list[str]
+    short_factors: list[str]
+    sar: Series
+    entry_long: list[bool]  # base entry: 1H M trend, >= min_other other factors, SAR (no StochRSI)
+    entry_short: list[bool]
     zone_c: Series
     zone_b: Series
     vwap: Series
@@ -219,43 +217,13 @@ def compute(bars: Bars, htf: HtfContext, params: FgiParams | None = None) -> Fgi
         td_bull.append((ct_bull_flip or st_bull_flip) and ct_up[i] and loc_bull[i])
         td_bear.append((ct_bear_flip or st_bear_flip) and (not ct_up[i]) and loc_bear[i])
 
-    # --- confluence factors ---
-    g_atr = atr(h, lo, c, p.g_atr_len)
-    g_rsi = rsi(c, p.g_rsi_len)
-    _, bb_up, bb_dn = bollinger(c, p.g_bb_len, p.g_bb_dev)
-    piv_h = pivot_high(h, p.g_sw_len, p.g_sw_len)
-    piv_l = pivot_low(lo, p.g_sw_len, p.g_sw_len)
-    last_sh = last_sl = NAN
-    at_sup: list[bool] = []
-    at_res: list[bool] = []
-    near_ema: list[bool] = []
+    # --- entry score: 5 factors (local SuperTrend, 1H M trend, close vs EMA1, divergence,
+    # sweep & engulf) and the mandatory Parabolic SAR gate ---
     rec_sweep_bull: list[bool] = []
     rec_sweep_bear: list[bool] = []
     rs_bull = rs_bear = False
     sb_bar = sr_bar = 0
     for i in range(n):
-        if not isnan(piv_h[i]):
-            last_sh = h[i - p.g_sw_len]
-        if not isnan(piv_l[i]):
-            last_sl = lo[i - p.g_sw_len]
-        a = g_atr[i]
-        at_sup.append(
-            lo[i] <= bb_dn[i]
-            or (
-                not isnan(last_sl)
-                and lo[i] <= last_sl + a * p.g_sr_buf
-                and c[i] >= last_sl - a * 0.5
-            )
-        )
-        at_res.append(
-            h[i] >= bb_up[i]
-            or (
-                not isnan(last_sh)
-                and h[i] >= last_sh - a * p.g_sr_buf
-                and c[i] <= last_sh + a * 0.5
-            )
-        )
-        near_ema.append(abs(c[i] - ema3[i]) <= a * p.g_ema_near)
         if i > 0:
             if lo[i] < lo[i - 1] and c[i] > h[i - 1] and c[i] > o[i]:
                 rs_bull, sb_bar = True, i
@@ -267,29 +235,40 @@ def compute(bars: Bars, htf: HtfContext, params: FgiParams | None = None) -> Fgi
             rs_bear = False
         rec_sweep_bull.append(rs_bull)
         rec_sweep_bear.append(rs_bear)
+    g_rsi = rsi(c, p.g_rsi_len)
     div_bull, div_bear = single_pivot_divergence(g_rsi, h, lo, p.g_div_len)
+    sar_line = sar(h, lo, c, p.sar_start, p.sar_inc, p.sar_max)
 
     long_score: list[int] = []
     short_score: list[int] = []
+    long_factors: list[str] = []
+    short_factors: list[str] = []
+    entry_long: list[bool] = []
+    entry_short: list[bool] = []
     for i in range(n):
-        htf_bull = htf.htf_dir[i] < 0
-        htf_bear = htf.htf_dir[i] > 0
-        r1, r2 = htf.rsi_tf1[i], htf.rsi_tf2[i]
-        long_score.append(
-            int(htf_bull)
-            + int(loc_bull[i])
-            + int(r1 > p.g_rsi_long and r2 > p.g_rsi_long)
-            + int(at_sup[i] or near_ema[i])
-            + int(div_bull[i])
-            + int(rec_sweep_bull[i])
+        lf = [
+            (loc_bull[i], "ST"),
+            (htf.com_trend[i] == 1, "1H"),
+            (c[i] > ema1[i], "EMA"),
+            (div_bull[i], "DIV"),
+            (rec_sweep_bull[i], "SWP"),
+        ]
+        sf = [
+            (loc_bear[i], "ST"),
+            (htf.com_trend[i] == -1, "1H"),
+            (c[i] < ema1[i], "EMA"),
+            (div_bear[i], "DIV"),
+            (rec_sweep_bear[i], "SWP"),
+        ]
+        long_factors.append(",".join(name for ok, name in lf if ok))
+        short_factors.append(",".join(name for ok, name in sf if ok))
+        long_score.append(sum(1 for ok, _ in lf if ok))
+        short_score.append(sum(1 for ok, _ in sf if ok))
+        entry_long.append(
+            htf.com_trend[i] == 1 and long_score[i] - 1 >= p.min_other and c[i] > sar_line[i]
         )
-        short_score.append(
-            int(htf_bear)
-            + int(loc_bear[i])
-            + int(r1 < p.g_rsi_short and r2 < p.g_rsi_short)
-            + int(at_res[i] or near_ema[i])
-            + int(div_bear[i])
-            + int(rec_sweep_bear[i])
+        entry_short.append(
+            htf.com_trend[i] == -1 and short_score[i] - 1 >= p.min_other and c[i] < sar_line[i]
         )
 
     # --- s / r letters ---
@@ -312,22 +291,8 @@ def compute(bars: Bars, htf: HtfContext, params: FgiParams | None = None) -> Fgi
             and c[i] > line_s + p.l1_in * hw
             and rsi_d[i - 1] < p.l1_rsi_s
         )
-        r2_ = (
-            prev_beyond_r
-            and h[i] > line_r
-            and _div(h[i] - line_r, hw) > p.l2_ext
-            and _div(o[i] - line_r, hw) > p.l2_open
-            and _div(h[i] - h[i - 1], hw) >= p.l2_new
-        )
-        s2_ = (
-            prev_beyond_s
-            and lo[i] < line_s
-            and _div(line_s - lo[i], hw) > p.l2_ext
-            and _div(line_s - o[i], hw) > p.l2_open
-            and _div(lo[i - 1] - lo[i], hw) >= p.l2_new
-        )
-        r_letter[i] = bool(r1_ or r2_)
-        s_letter[i] = bool(s1_ or s2_)
+        r_letter[i] = bool(r1_)
+        s_letter[i] = bool(s1_)
 
     zc, zb = zones(h, lo, c, rf.moved, p.zone)
     hlc3 = [(h[i] + lo[i] + c[i]) / 3.0 for i in range(n)]
@@ -358,6 +323,11 @@ def compute(bars: Bars, htf: HtfContext, params: FgiParams | None = None) -> Fgi
         vwap=vwap,
         long_score=long_score,
         short_score=short_score,
+        long_factors=long_factors,
+        short_factors=short_factors,
+        sar=sar_line,
+        entry_long=entry_long,
+        entry_short=entry_short,
     )
 
 
@@ -396,6 +366,13 @@ class SignalSnapshot:
     against_htf: bool | None
     zone_position: str | None
     price_vs_vwap: str | None
+    htf_dir: int  # 4H SuperTrend: -1 bull, 1 bear, 0 unknown
+    long_score: int
+    short_score: int
+    long_factors: str
+    short_factors: str
+    entry_long: bool
+    entry_short: bool
 
 
 def snapshot(
@@ -425,7 +402,23 @@ def snapshot(
         against_htf=against,
         zone_position=zone_position(c, s.zone_c[i], s.zone_b[i], p.zone),
         price_vs_vwap=None if isnan(vw) else ("ABOVE" if c >= vw else "BELOW"),
+        htf_dir=s.htf_dir[i],
+        long_score=s.long_score[i],
+        short_score=s.short_score[i],
+        long_factors=s.long_factors[i],
+        short_factors=s.short_factors[i],
+        entry_long=s.entry_long[i],
+        entry_short=s.entry_short[i],
     )
+
+
+def stoch_direction(close: Sequence[float], params: FgiParams | None = None) -> int:
+    """StochRSI K vs D on the newest closed bar: 1 K above D, -1 K below D, 0 equal / unknown."""
+    p = params or FgiParams()
+    k, d = stoch_rsi(close, p.sr_rsi_len, p.sr_stoch_len, p.sr_k, p.sr_d)
+    if not close or isnan(k[-1]) or isnan(d[-1]):
+        return 0
+    return 1 if k[-1] > d[-1] else -1 if k[-1] < d[-1] else 0
 
 
 def recent_events(

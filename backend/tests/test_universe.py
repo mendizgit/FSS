@@ -1,14 +1,22 @@
 import pytest
 
+from tss.core.settings import Denylist
 from tss.domain.universe import in_universe, is_liquid, oi_notional_usdt, spot_symbol_for, zero_fee
 
 
 def test_in_universe() -> None:
-    assert in_universe("USDT", "USDT", 0, "USDT", [], "BTC_USDT")
-    assert not in_universe("USDT", "USDT", 3, "USDT", [], "X_USDT")  # offline
-    assert not in_universe("USDC", "USDC", 0, "USDT", [], "X_USDC")
-    assert not in_universe("USDT", "USDC", 0, "USDT", [], "X_USDT")
-    assert not in_universe("USDT", "USDT", 0, "USDT", ["BTC_USDT"], "BTC_USDT")  # denylisted
+    assert in_universe("USDT", "USDT", 0, "USDT", False)
+    assert not in_universe("USDT", "USDT", 3, "USDT", False)  # offline
+    assert not in_universe("USDC", "USDC", 0, "USDT", False)
+    assert not in_universe("USDT", "USDC", 0, "USDT", False)
+    assert not in_universe("USDT", "USDT", 0, "USDT", True)  # denylisted
+
+
+def test_denylist_symbols_and_suffixes() -> None:
+    deny = Denylist(symbols=["XAU_USDT"], suffixes=["STOCK_USDT"])
+    assert deny.is_denied("XAU_USDT") and deny.is_denied("GOOGLSTOCK_USDT")
+    assert not deny.is_denied("BTC_USDT") and not deny.is_denied("XAUT_USDT")
+    assert not Denylist().is_denied("GOOGLSTOCK_USDT")
 
 
 def test_zero_fee_requires_both_returned_and_zero() -> None:

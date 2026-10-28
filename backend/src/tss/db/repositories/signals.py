@@ -138,7 +138,20 @@ async def views_from_rows(session: AsyncSession, rows: list[Signal]) -> dict[str
             r.against_htf,
         )
         out.setdefault(r.symbol, []).append(
-            TfView(r.timeframe, r.bar_close_time, r.m_trend, events)
+            TfView(
+                r.timeframe,
+                r.bar_close_time,
+                r.m_trend,
+                events,
+                entry_long=r.entry_long,
+                entry_short=r.entry_short,
+                long_score=r.long_score,
+                short_score=r.short_score,
+                long_factors=r.long_factors,
+                short_factors=r.short_factors,
+                htf_dir=r.htf_dir,
+                stoch_dir=r.stoch_dir,
+            )
         )
     return out
 
@@ -157,20 +170,31 @@ async def save_setups(session: AsyncSession, rows: list[dict[str, Any]]) -> None
 
 
 def setup_row(
-    symbol: str, setup: Setup, now: datetime, *, detected_at: datetime, notified_at: datetime | None
+    symbol: str,
+    setup: Setup,
+    now: datetime,
+    *,
+    detected_at: datetime,
+    notified_at: datetime | None,
+    last_long_alert_at: datetime | None,
+    last_short_alert_at: datetime | None,
 ) -> dict[str, Any]:
     return {
         "symbol": symbol,
         "bias": setup.bias,
         "active": True,
         "trigger_timeframe": setup.trigger_timeframe,
-        "trigger_event": setup.trigger_event,
+        "trigger_event": None,
         "trigger_bar_close_time": setup.trigger_bar_close_time,
         "against_htf": setup.against_htf,
-        "htf_event": setup.htf_event,
-        "htf_bars_ago": setup.htf_bars_ago,
+        "htf_event": None,
+        "htf_bars_ago": None,
+        "score": setup.score,
+        "factors": setup.factors,
         "detected_at": detected_at,
         "notified_at": notified_at,
+        "last_long_alert_at": last_long_alert_at,
+        "last_short_alert_at": last_short_alert_at,
         "updated_at": now,
     }
 

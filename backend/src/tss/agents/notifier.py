@@ -72,9 +72,8 @@ class NotifierAgent(BaseAgent):
                     symbol=row.symbol,
                     bias=row.bias,
                     trigger_timeframe=row.trigger_timeframe,
-                    trigger_event=row.trigger_event,
-                    htf_event=row.htf_event,
-                    htf_bars_ago=row.htf_bars_ago,
+                    score=row.score,
+                    factors=row.factors,
                     trigger_bar_close_time=row.trigger_bar_close_time,
                     against_htf=row.against_htf,
                 )

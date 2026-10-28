@@ -429,107 +429,123 @@ async def scenario_setups(cfg: AppConfig) -> None:
             )
         await ses.commit()
 
-    async def put(symbol: str, spec: dict[str, tuple[str, str, int | None]]) -> None:
+    async def put(symbol: str, side: str | None, stoch: int | None = None) -> None:
+        """15m row carries the base entry (SAR + score); the 5m row carries the StochRSI side."""
+        long, short = side == "long", side == "short"
+        if stoch is None:
+            stoch = 1 if long else -1
         async with c.deps.session_factory() as ses:
             await ses.execute(Signal.__table__.delete().where(Signal.symbol == symbol))
-            for tf, (trend, last, ago) in spec.items():
+            for tf in ("5m", "15m", "1h"):
                 ses.add(
                     Signal(
                         symbol=symbol,
                         timeframe=tf,
                         bar_close_time=t0,
-                        m_trend=trend,
-                        last_event=last,
-                        bars_ago=ago,
-                        against_htf=False,
+                        m_trend="UP",
+                        last_event="NONE",
+                        bars_ago=None,
+                        against_htf=None,
                         computed_at=now,
+                        htf_dir=-1,
+                        long_score=4 if long else 1,
+                        short_score=4 if short else 1,
+                        long_factors="ST,1H,EMA,DIV" if long else "",
+                        short_factors="ST,1H,EMA,DIV" if short else "",
+                        entry_long=long,
+                        entry_short=short,
+                        stoch_dir=stoch if tf == "5m" else None,
                     )
                 )
             await ses.commit()
 
-    long_spec = {
-        "5m": ("UP", "BULL_T", 1),
-        "15m": ("UP", "NONE", None),
-        "1h": ("UP", "BUY", 4),
-    }
-    short_spec = {
-        "5m": ("DOWN", "BEAR_T", 0),
-        "15m": ("DOWN", "NONE", None),
-        "1h": ("DOWN", "SELL", 2),
-    }
-    none_spec = {
-        "5m": ("DOWN", "NONE", None),
-        "15m": ("UP", "NONE", None),
-        "1h": ("UP", "NONE", None),
-    }
     agent = SetupAgent(c.deps)
+    cooldown = timedelta(minutes=cfg.thresholds.signals.alert_cooldown_minutes)
 
     async def state() -> dict[str, SignalSetup]:
         async with c.deps.session_factory() as ses:
             return {r.symbol: r for r in (await ses.execute(select(SignalSetup))).scalars()}
 
-    await put("AAA_USDT", long_spec)
-    await put("BBB_USDT", none_spec)
-    out = await agent.execute(uuid.uuid4(), now)
+    async def run(at: datetime) -> dict[str, Any]:
+        out = await agent.execute(uuid.uuid4(), at)
+        return dict(out.result.meta) if out.result is not None else {}
+
+    await put("AAA_USDT", "long")
+    await put("BBB_USDT", None)
+    meta = await run(now)
     st = await state()
     check(
         "first run is a baseline: the current Long is recorded as notified (no alert burst)",
-        out.status == "SUCCESS"
-        and set(st) == {"AAA_USDT"}
+        set(st) == {"AAA_USDT"}
         and st["AAA_USDT"].bias == "long"
         and st["AAA_USDT"].notified_at is not None
-        and out.result is not None
-        and out.result.meta["baseline"] is True,
-        str(out.result and out.result.meta),
+        and st["AAA_USDT"].score == 4
+        and st["AAA_USDT"].factors == "ST,1H,EMA,DIV"
+        and meta["baseline"] is True,
+        str(meta),
     )
     check(
-        "a pool-only symbol (no selection rank) is evaluated; the trigger is the 5m bullT",
-        st["AAA_USDT"].trigger_timeframe == "5m" and st["AAA_USDT"].trigger_event == "BULL_T",
+        "a pool-only symbol (no selection rank) is evaluated; trigger is the 15m entry",
+        st["AAA_USDT"].trigger_timeframe == "15m",
     )
 
-    await put("BBB_USDT", short_spec)
-    out = await agent.execute(uuid.uuid4(), now)
+    await put("BBB_USDT", "short")
+    meta = await run(now)
     st = await state()
     check(
         "a new Short appears: stored unnotified (alert pending), the old Long is not re-alerted",
         st["BBB_USDT"].bias == "short"
         and st["BBB_USDT"].notified_at is None
         and st["AAA_USDT"].notified_at is not None
-        and out.result is not None
-        and out.result.meta["new"] == 1,
-        str(out.result and out.result.meta),
+        and meta["new"] == 1,
+        str(meta),
     )
-    out = await agent.execute(uuid.uuid4(), now)
+    check("same entries on the next run: nothing new", (await run(now))["new"] == 0)
+
+    await put("BBB_USDT", "short", stoch=1)  # StochRSI K above D: the 5m gate closes
+    await run(now)
+    check("StochRSI disagreeing ends the entry", not (await state())["BBB_USDT"].active)
+    await put("BBB_USDT", "short", stoch=-1)
+    meta = await run(now + timedelta(minutes=5))
+    st = await state()
     check(
-        "same setups on the next run: nothing new",
-        out.result is not None and out.result.meta["new"] == 0,
-        str(out.result and out.result.meta),
+        "it returns 5 min later: reactivated, NOT alerted again (30-minute cooldown, per side)",
+        st["BBB_USDT"].active and st["BBB_USDT"].notified_at is not None and meta["new"] == 0,
+        str(meta),
     )
 
-    await put("AAA_USDT", none_spec)
-    await agent.execute(uuid.uuid4(), now)
-    check("a setup that stops qualifying becomes inactive", not (await state())["AAA_USDT"].active)
-    await put("AAA_USDT", long_spec)
-    out = await agent.execute(uuid.uuid4(), now)
+    await put("BBB_USDT", None)
+    await run(now + timedelta(minutes=10))
+    await put("BBB_USDT", "short", stoch=-1)
+    meta = await run(now + cooldown + timedelta(minutes=5))
     st = await state()
     check(
-        "it comes back with the very same trigger event: reactivated, NOT alerted again",
-        st["AAA_USDT"].active
-        and st["AAA_USDT"].notified_at is not None
-        and out.result is not None
-        and out.result.meta["new"] == 0,
-        str(out.result and out.result.meta),
+        "after the cooldown a fresh rising edge alerts again",
+        st["BBB_USDT"].active and st["BBB_USDT"].notified_at is None and meta["new"] == 1,
+        str(meta),
     )
-    await put("AAA_USDT", short_spec)
-    out = await agent.execute(uuid.uuid4(), now)
+
+    await put("AAA_USDT", "short", stoch=-1)
+    meta = await run(now + cooldown + timedelta(minutes=10))
     st = await state()
     check(
-        "Long flips to Short: a new alert is pending",
-        st["AAA_USDT"].bias == "short"
-        and st["AAA_USDT"].notified_at is None
-        and out.result is not None
-        and out.result.meta["new"] == 1,
-        str(out.result and out.result.meta),
+        "Long flips to Short: the short side has no cooldown yet, a new alert is pending",
+        st["AAA_USDT"].bias == "short" and st["AAA_USDT"].notified_at is None and meta["new"] == 1,
+        str(meta),
+    )
+    await put("AAA_USDT", "long")
+    meta = await run(now + cooldown + timedelta(minutes=15))
+    check(
+        "...flipping back to Long (never alerted: the first one was the baseline) alerts",
+        (await state())["AAA_USDT"].notified_at is None and meta["new"] == 1,
+        str(meta),
+    )
+    await put("AAA_USDT", "short")
+    meta = await run(now + cooldown + timedelta(minutes=20))
+    check(
+        "...and flipping to Short again inside the short cooldown is suppressed",
+        (await state())["AAA_USDT"].notified_at is not None and meta["new"] == 0,
+        str(meta),
     )
 
 

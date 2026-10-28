@@ -25,11 +25,10 @@ def msg(**kw: object) -> str:
     base: dict[str, object] = {
         "symbol": "UMA_USDT",
         "bias": "long",
-        "trigger_timeframe": "5m",
-        "trigger_event": "BUY",
-        "htf_event": "BULL_T",
-        "htf_bars_ago": 3,
-        "trigger_bar_close_time": datetime(2026, 10, 6, 9, 5, tzinfo=UTC),  # 14:35 IST
+        "trigger_timeframe": "15m",
+        "score": 4,
+        "factors": "ST,1H,EMA,DIV",
+        "trigger_bar_close_time": datetime(2026, 10, 6, 9, 15, tzinfo=UTC),  # 14:45 IST
         "against_htf": False,
     }
     return format_setup_message(**{**base, **kw})  # type: ignore[arg-type]
@@ -37,29 +36,22 @@ def msg(**kw: object) -> str:
 
 def test_long_message_is_exact() -> None:
     assert msg() == (
-        "<b>UMAUSDT.P</b>\nSetup : 🟢 Long\nTrigger : 5 min Buy\n"
-        "1h confirm : BullT, 3 bars ago\nBar close : 14:35 IST\n4H trend : ✓ With"
+        "<b>UMAUSDT.P</b>\nEntry : 🟢 Long\nTime : 15 min\n"
+        "Score : 4/5 (ST, 1H, EMA, DIV)\nBar close : 14:45 IST\n4H trend : ✓ With"
     )
 
 
-def test_short_variant_and_ago_wording() -> None:
-    short = msg(
-        symbol="BTC_USDT",
-        bias="short",
-        trigger_timeframe="15m",
-        trigger_event="BEAR_T",
-        htf_event="SELL",
-        htf_bars_ago=1,
-    )
+def test_short_variant_and_missing_score() -> None:
+    short = msg(symbol="BTC_USDT", bias="short", score=3, factors="1H,EMA,SWP")
     assert short.splitlines() == [
         "<b>BTCUSDT.P</b>",
-        "Setup : 🔴 Short",
-        "Trigger : 15 min BearT",
-        "1h confirm : Sell, 1 bar ago",
-        "Bar close : 14:35 IST",
+        "Entry : 🔴 Short",
+        "Time : 15 min",
+        "Score : 3/5 (1H, EMA, SWP)",
+        "Bar close : 14:45 IST",
         "4H trend : ✓ With",
     ]
-    assert "1h confirm : BullT, now" in msg(htf_bars_ago=0)
+    assert "Score : —/5" in msg(score=None, factors=None)
 
 
 def test_4h_line_is_informational_and_escaping() -> None:

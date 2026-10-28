@@ -185,13 +185,11 @@ class SignalRowOut(BaseModel):
 
 class SetupOut(BaseModel):
     bias: str  # "long" | "short"
-    trigger_timeframe: str  # 5m | 15m
-    trigger_event: str
-    trigger_bars_ago: int
-    against_htf: bool | None  # informational only
-    minutes_ago: int  # age of the triggering event
-    htf_event: str
-    htf_bars_ago: int
+    trigger_timeframe: str  # 15m
+    score: int  # factors met out of 5
+    factors: str  # e.g. "ST,1H,EMA"
+    against_htf: bool | None  # vs the 4H SuperTrend; informational only
+    minutes_ago: int  # minutes since the 15m bar closed
 
 
 class SignalSymbolOut(BaseModel):
@@ -206,3 +204,67 @@ class SignalSymbolOut(BaseModel):
 class SignalsOut(BaseModel):
     updated_at: datetime | None
     symbols: list[SignalSymbolOut]
+
+
+class PaperTradeOut(BaseModel):
+    id: int
+    symbol: str
+    side: str
+    status: str
+    opened_at: datetime
+    entry_price: float
+    stop_price: float
+    target_price: float
+    score: int | None
+    factors: str | None
+    against_htf: bool | None
+    flip_events: str | None
+    flip_confirms: bool
+    mfe_pct: float | None
+    mae_pct: float | None
+    last_price: float | None  # open trades: latest snapshot price
+    unrealized_usdt: float | None
+    closed_at: datetime | None
+    exit_price: float | None
+    exit_reason: str | None
+    pnl_usdt: float | None
+    r_multiple: float | None
+
+
+class PaperGroupOut(BaseModel):
+    key: str
+    trades: int
+    wins: int
+    pnl_usdt: float
+    avg_r: float
+
+
+class PaperSummaryOut(BaseModel):
+    start_balance_usdt: float
+    balance_usdt: float  # start + realized PnL
+    realized_usdt: float
+    unrealized_usdt: float
+    margin_in_use_usdt: float
+    open_trades: int
+    closed_trades: int
+    wins: int
+    win_rate_pct: float | None
+    avg_r: float | None
+    profit_factor: float | None
+    max_drawdown_usdt: float
+    leverage: float
+    margin_per_trade_usdt: float
+    stop_pct: float
+    reward_risk: float
+    timeout_minutes: int
+
+
+class PaperOut(BaseModel):
+    summary: PaperSummaryOut
+    open: list[PaperTradeOut]
+    closed: list[PaperTradeOut]
+    by_score: list[PaperGroupOut]
+    by_flip_confirm: list[PaperGroupOut]
+    by_htf: list[PaperGroupOut]
+    by_exit: list[PaperGroupOut]
+    by_side: list[PaperGroupOut]
