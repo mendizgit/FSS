@@ -1,6 +1,6 @@
 # MEMORY — TSS progress (single file · edit changed lines only · max 150 lines)
 
-updated: 2026-10-29 | commit: d85e1d1 (+uncommitted: Pine v3 entry signal + paper trading + FGI paper test; deployed, migrations e4b9c7d2a135, f1a8d3c5b702, a7c2e5d9b310) | phase: P5 | status: AWAITING_REVIEW
+updated: 2026-10-29 | commit: 133f00c (all work committed) | phase: P5 | status: AWAITING_REVIEW
 
 ## Next step
 - SESSION SUMMARY 2026-10-29 (user ended session; FGI forward test RUNNING 24/7): FGI Pro v2.0 (agent-kit/reference/pine/strategy build on FGI.txt) paper test live: 15m, ADX>=35, min score 4, trend = 4H ST + 1H ST must agree (`paper_fgi.use_4h: true`), stop cap 2 %, TP1 1.5 ATR 50 % -> BE, TP2 3.5 ATR, exit on trend flip, pool top 80 USDT perps by 24h turnover, max 10 open, 500 USDT / 10x / 50 margin, fee+slip 0.02 % per side. v4 paper OFF, Telegram OFF, daily pause LIFTED (quiet_hours 0/0). First run 19:15 UTC OK: 2 trades (NICKEL_USDT short = commodity NOT in denylist, user said leave it and not to scan denylist now; SNXX_USDT long, user declined adding SOXS/SOXL/KORU/SNXX to denylist).
